@@ -1,34 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const EditProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = location.state || {};
-  
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    surname: user?.surname || '',
-    gender: user?.gender || 'М',
-    birthDate: user?.birthDate || '',
-    description: user?.description || '',
-    personality: user?.personality || 'INTP',
-    createdAt: user?.createdAt || '04.04.25',
-    updatedAt: user?.updatedAt || '04.04.25',
+
+  // Функция для вычисления возраста на основе даты рождения
+  const calculateAge = (birthDate) => {
+    if (!birthDate || !/^\d{2}\.\d{2}\.\d{4}$/.test(birthDate)) return '';
+    const [day, month, year] = birthDate.split('.').map(Number);
+    const birth = new Date(year, month - 1, day);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const savedData = localStorage.getItem('updatedUser');
+    const parsedData = savedData ? JSON.parse(savedData) : {
+      name: user?.name || '',
+      gender: user?.gender || 'М',
+      birthDate: user?.birthDate || '',
+      description: user?.description || '',
+      personality: user?.personality || 'INTP',
+      createdAt: user?.createdAt || '04.04.25',
+      age: user?.age || '',
+      photo: user?.photo || null,
+    };
+    return parsedData;
   });
+
+  const [age, setAge] = useState(() => calculateAge(formData.birthDate));
+  const [photoPreview, setPhotoPreview] = useState(formData.photo || null);
+
+  useEffect(() => {
+    setAge(calculateAge(formData.birthDate));
+  }, [formData.birthDate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+        setFormData((prev) => ({ ...prev, photo: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('Save button clicked');
-    console.log('Saving profile:', formData);
-    localStorage.setItem('updatedUser', JSON.stringify(formData));
-    navigate('/profile', { state: { updatedUser: formData } });
+    const updatedAge = calculateAge(formData.birthDate);
+    const updatedData = {
+      ...formData,
+      age: updatedAge !== '' ? updatedAge : formData.age,
+    };
+    localStorage.setItem('updatedUser', JSON.stringify(updatedData));
+    navigate('/profile', { state: { updatedUser: updatedData } });
+  };
+
+  const handleTestRedirect = () => {
+    window.location.href = 'https://www.16personalities.com/ru/test-lichnosti';
   };
 
   const personalityTypes = [
@@ -52,9 +96,23 @@ const EditProfilePage = () => {
 
       {/* Контейнер для фото и линии */}
       <div className="relative w-full max-w-[500px] mx-auto">
-        {/* Аватар */}
-        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center">
-          <span className="text-gray-600 text-sm">Нет фото</span>
+        {/* Аватар с возможностью загрузки */}
+        <div
+          className="w-full aspect-square bg-gray-300 flex items-center justify-center rounded-[15px] cursor-pointer"
+          onClick={() => document.getElementById('photoInput').click()}
+        >
+          {photoPreview ? (
+            <img src={photoPreview} alt="Profile" className="w-full h-full object-cover rounded-[15px]" />
+          ) : (
+            <span className="text-gray-600 text-sm">Нет фото</span>
+          )}
+          <input
+            id="photoInput"
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            className="hidden"
+          />
         </div>
 
         {/* Простая линия */}
@@ -100,25 +158,12 @@ const EditProfilePage = () => {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className="w-full border-2 border-black rounded-none p-2 text-black"
+              className="w-full border-2 border-black rounded-[15px] p-2 text-black"
               placeholder="Имя"
             />
           </div>
 
-          {/* Фамилия */}
-          <div>
-            <label className="block text-gray-600 text-sm mb-1">Фамилия</label>
-            <input
-              type="text"
-              name="surname"
-              value={formData.surname}
-              onChange={handleChange}
-              className="w-full border-2 border-black rounded-none p-2 text-black"
-              placeholder="Фамилия"
-            />
-          </div>
-
-          {/* Пол и Дата рождения */}
+          {/* Пол и Дата рождения с возрастом */}
           <div className="flex gap-4">
             {/* Пол */}
             <div className="flex-1">
@@ -148,7 +193,7 @@ const EditProfilePage = () => {
                 </label>
               </div>
             </div>
-            {/* Дата рождения */}
+            {/* Дата рождения и возраст */}
             <div className="flex-1">
               <label className="block text-gray-600 text-sm mb-1">Дата рождения:</label>
               <input
@@ -156,9 +201,12 @@ const EditProfilePage = () => {
                 name="birthDate"
                 value={formData.birthDate}
                 onChange={handleChange}
-                className="w-full border-2 border-black rounded-none p-2 text-black"
+                className="w-full border-2 border-black rounded-[15px] p-2 text-black"
                 placeholder="ДД.ММ.ГГГГ"
               />
+              {age !== '' && (
+                <p className="text-gray-600 text-sm mt-1">Возраст: {age} лет</p>
+              )}
             </div>
           </div>
 
@@ -169,7 +217,7 @@ const EditProfilePage = () => {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              className="w-full border-2 border-black rounded-none p-2 text-black h-32 resize-none"
+              className="w-full border-2 border-black rounded-[15px] p-2 text-black h-32 resize-none"
               placeholder="О себе"
             />
           </div>
@@ -182,7 +230,7 @@ const EditProfilePage = () => {
                 name="personality"
                 value={formData.personality}
                 onChange={handleChange}
-                className="w-full border-2 border-black rounded-none p-2 text-black"
+                className="w-full border-2 border-black rounded-[15px] p-2 text-black"
               >
                 {personalityTypes.map((type) => (
                   <option key={type} value={type}>
@@ -191,12 +239,18 @@ const EditProfilePage = () => {
                 ))}
               </select>
             </div>
-            <button className="bg-gray-200 text-gray-600 px-4 py-2 border-2 border-black">
+            <button
+              onClick={handleTestRedirect}
+              className="bg-gray-200 text-gray-600 px-4 py-2 border-2 border-black rounded-[15px]"
+            >
               Тестирование
             </button>
           </div>
         </div>
       </div>
+
+      {/* Нижний отступ (footer placeholder) */}
+      <div className="h-20" />
     </div>
   );
 };

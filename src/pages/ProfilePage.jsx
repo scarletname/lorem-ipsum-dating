@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const mockUsers = [
@@ -14,10 +14,27 @@ const mockUsers = [
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const user = mockUsers[0];
+
+  // Загружаем данные из localStorage или используем mockUser как резерв
+  const [user, setUser] = useState(() => {
+    const savedData = localStorage.getItem('updatedUser');
+    return savedData ? JSON.parse(savedData) : mockUsers[0];
+  });
+
+  // Обновляем user при изменении localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const savedData = localStorage.getItem('updatedUser');
+      if (savedData) {
+        setUser(JSON.parse(savedData));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const handleEditToggle = () => {
-    console.log('Navigating to edit-profile with user:', user); // Отладка
+    console.log('Navigating to edit-profile with user:', user);
     navigate('/edit-profile', { state: { user } });
   };
 
@@ -35,9 +52,13 @@ const ProfilePage = () => {
 
       {/* Контейнер для фото и линии */}
       <div className="relative w-full max-w-[500px] mx-auto">
-        {/* Аватар */}
-        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center">
-          <span className="text-gray-600 text-sm">Нет фото</span>
+        {/* Аватар с отображением фото */}
+        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center rounded-[15px]">
+          {user.photo ? (
+            <img src={user.photo} alt="Profile" className="w-full h-full object-cover rounded-[15px]" />
+          ) : (
+            <span className="text-gray-600 text-sm">Нет фото</span>
+          )}
         </div>
 
         {/* Простая линия */}
@@ -71,9 +92,10 @@ const ProfilePage = () => {
         <div className="flex flex-col text-left">
           <h2 className="text-[32px] font-bold">{user.name}</h2>
           <p className="text-[20px] text-gray-600 mt-2">
-            {user.gender}, {user.age} лет, {user.personality}
+            {user.gender}, {user.age || ''} лет, {user.personality}
           </p>
           <p className="text-gray-600 text-sm mt-1">{user.description}</p>
+          <p className="text-gray-600 text-sm">Создано: {user.createdAt}</p>
         </div>
       </div>
     </div>

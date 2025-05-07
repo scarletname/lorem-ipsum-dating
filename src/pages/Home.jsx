@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 const mockUsers = [
   {
     id: 1,
-    name: 'Имя Фамилия',
+    name: 'Наталья',
     gender: 'Ж',
     age: 18,
     personality: 'INTP',
@@ -52,26 +52,22 @@ const Home = ({ token }) => {
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
-      {/* Шапка */}
       <header className="fixed top-0 left-0 right-0 bg-black z-10">
         <div className="flex justify-center px-0 py-2">
           <span className="text-white font-bold text-xl">Поиск</span>
         </div>
       </header>
 
-      {/* Отступ сверху под шапку */}
       <div className="mt-14" />
 
-      {/* Карточка свайпа */}
       <div className="w-[90%] sm:w-[80%] md:w-[500px] max-w-[500px] mx-auto mt-4">
-        <div className="rounded-lg bg-white border border-gray-200 relative">
-          {/* Фотография с листанием */}
+        <div className="rounded-lg bg-white border border-gray-200 relative overflow-hidden">
           {images.length > 0 ? (
             <div className="relative w-full pt-[100%]">
               <img
                 src={images[currentImageIndex]}
                 alt={user.name}
-                className="absolute top-0 left-0 w-full h-full object-cover bg-gray-300"
+                className="absolute top-0 left-0 w-full h-full object-cover bg-gray-300 rounded-t-lg"
                 onError={(e) => {
                   e.target.src = '/assets/images/placeholder.jpg';
                 }}
@@ -120,12 +116,11 @@ const Home = ({ token }) => {
               )}
             </div>
           ) : (
-            <div className="w-full pt-[100%] bg-gray-300 flex items-center justify-center">
+            <div className="w-full pt-[100%] bg-gray-300 flex items-center justify-center rounded-t-lg">
               <span className="text-gray-600 text-sm">Нет фотографий</span>
             </div>
           )}
 
-          {/* Контент карточки */}
           <div className="p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold">
               {user.name}, {user.gender}, {user.age} лет, {user.personality}
@@ -135,7 +130,6 @@ const Home = ({ token }) => {
             </p>
           </div>
 
-          {/* Кнопки лайк/дизлайк */}
           <div className="flex justify-center gap-4 pb-4">
             <button
               onClick={handleDislike}
