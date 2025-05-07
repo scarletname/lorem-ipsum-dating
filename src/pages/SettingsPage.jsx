@@ -12,7 +12,7 @@ const SettingsPage = () => {
         pb: 7, // Отступ снизу для навигации
       }}
     >
-      <Typography variant="h4">Settings Page</Typography>
+      <Typography variant="h4">хуй</Typography>
     </Box>
   );
 };

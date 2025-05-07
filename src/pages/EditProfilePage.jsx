@@ -1,10 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+// Изначально пустой массив, который будет заполнен данными с сервера
+let mockUsers = [];
+
+async function fetchData() {
+  try {
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/users/18781f64-aa34-447e-abef-4dc1b6674c48`);
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    const data = await response.json();
+    // Заполняем mockUsers полученными данными
+    mockUsers = [data];
+    return data;
+  } catch (error) {
+    console.error("Ошибка запроса:", error);
+    return null;
+  }
+}
+
 const EditProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = location.state || {};
+  const { user: locationUser } = location.state || {};
 
   // Функция для вычисления возраста на основе даты рождения
   const calculateAge = (birthDate) => {
@@ -20,23 +39,74 @@ const EditProfilePage = () => {
     return age;
   };
 
-  const [formData, setFormData] = useState(() => {
-    const savedData = localStorage.getItem('updatedUser');
-    const parsedData = savedData ? JSON.parse(savedData) : {
-      name: user?.name || '',
-      gender: user?.gender || 'М',
-      birthDate: user?.birthDate || '',
-      description: user?.description || '',
-      personality: user?.personality || 'INTP',
-      createdAt: user?.createdAt || '04.04.25',
-      age: user?.age || '',
-      photo: user?.photo || null,
-    };
-    return parsedData;
-  });
+  // Функция для преобразования даты в формат ISO
+  const formatDateToISO = (dateString) => {
+    if (!dateString || !/^\d{2}\.\d{2}\.\d{4}$/.test(dateString)) return null;
+    const [day, month, year] = dateString.split('.');
+    return `${year}-${month}-${day}T00:00:00Z`;
+  };
 
-  const [age, setAge] = useState(() => calculateAge(formData.birthDate));
-  const [photoPreview, setPhotoPreview] = useState(formData.photo || null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    name: '',
+    gender: 'М',
+    birthDate: '',
+    description: '',
+    personality: 'INTP',
+    createdAt: '',
+    age: '',
+    photo: null,
+    about_myself: '',
+    surname: ''
+  });
+  const [age, setAge] = useState('');
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const loadData = async () => {
+      // Пытаемся загрузить данные с сервера
+      const serverData = await fetchData();
+      
+      // Проверяем, есть ли данные в mockUsers (заполненные fetchData)
+      const userData = serverData || mockUsers[0] || locationUser;
+      
+      if (userData) {
+        // Преобразуем данные API в наш формат
+        const formattedData = {
+          name: userData.name || '',
+          surname: userData.surname || '',
+          gender: userData.gender === 'MALE' ? 'М' : 'Ж',
+          birthDate: userData.birth_date ? 
+            new Date(userData.birth_date).toLocaleDateString('ru-RU') : '',
+          description: userData.about_myself || '',
+          personality: userData.jung_result || 'INTP',
+          createdAt: userData.created_at ? 
+            new Date(userData.created_at).toLocaleDateString('ru-RU') : '04.04.25',
+          age: userData.birth_date ? 
+            calculateAge(new Date(userData.birth_date).toLocaleDateString('ru-RU')) : '',
+          photo: userData.photos?.[0] || null,
+          about_myself: userData.about_myself || ''
+        };
+        
+        setFormData(formattedData);
+        setPhotoPreview(formattedData.photo);
+        setAge(formattedData.age);
+      } else {
+        // Если данных нет ниоткуда, используем localStorage или заглушку
+        const savedData = localStorage.getItem('updatedUser');
+        if (savedData) {
+          const parsedData = JSON.parse(savedData);
+          setFormData(parsedData);
+          setPhotoPreview(parsedData.photo);
+          setAge(calculateAge(parsedData.birthDate));
+        }
+      }
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [locationUser]);
 
   useEffect(() => {
     setAge(calculateAge(formData.birthDate));
@@ -59,16 +129,58 @@ const EditProfilePage = () => {
     }
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.stopPropagation();
     e.preventDefault();
-    const updatedAge = calculateAge(formData.birthDate);
-    const updatedData = {
-      ...formData,
-      age: updatedAge !== '' ? updatedAge : formData.age,
-    };
-    localStorage.setItem('updatedUser', JSON.stringify(updatedData));
-    navigate('/profile', { state: { updatedUser: updatedData } });
+    setIsSaving(true);
+
+    try {
+      const updatedAge = calculateAge(formData.birthDate);
+      const updatedData = {
+        ...formData,
+        age: updatedAge !== '' ? updatedAge : formData.age,
+        about_myself: formData.description,
+        gender: formData.gender === 'М' ? 'MALE' : 'FEMALE'
+      };
+
+      // Подготовка данных для отправки на сервер
+      const apiData = {
+        name: updatedData.name,
+        surname: updatedData.surname,
+        gender: updatedData.gender,
+        birth_date: formatDateToISO(updatedData.birthDate),
+        about_myself: updatedData.description,
+        jung_result: updatedData.personality,
+        jung_last_attempt: new Date().toISOString()
+      };
+
+      // Отправка данных на сервер
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/users/18781f64-aa34-447e-abef-4dc1b6674c48/profile`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(apiData)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Ошибка при сохранении данных');
+      }
+
+      // Сохраняем в localStorage
+      localStorage.setItem('updatedUser', JSON.stringify(updatedData));
+      
+      // Перенаправляем на страницу профиля
+      navigate('/profile', { state: { updatedUser: updatedData } });
+    } catch (error) {
+      console.error('Ошибка при сохранении:', error);
+      alert('Не удалось сохранить изменения. Пожалуйста, попробуйте снова.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTestRedirect = () => {
@@ -81,6 +193,10 @@ const EditProfilePage = () => {
     'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
     'ISTP', 'ISFP', 'ESTP', 'ESFP'
   ];
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
@@ -122,22 +238,29 @@ const EditProfilePage = () => {
         <div className="absolute bottom-0 right-[35px] transform translate-y-1/2 z-10">
           <button
             onClick={handleSave}
-            className="bg-green-500 rounded-full w-10 h-10 flex justify-center items-center border-2 border-black"
+            disabled={isSaving}
+            className={`rounded-full w-10 h-10 flex justify-center items-center border-2 border-black ${
+              isSaving ? 'bg-gray-400' : 'bg-green-500'
+            }`}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            {isSaving ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            )}
           </button>
         </div>
       </div>
@@ -160,6 +283,19 @@ const EditProfilePage = () => {
               onChange={handleChange}
               className="w-full border-2 border-black rounded-[15px] p-2 text-black"
               placeholder="Имя"
+            />
+          </div>
+
+          {/* Фамилия */}
+          <div>
+            <label className="block text-gray-600 text-sm mb-1">Фамилия</label>
+            <input
+              type="text"
+              name="surname"
+              value={formData.surname}
+              onChange={handleChange}
+              className="w-full border-2 border-black rounded-[15px] p-2 text-black"
+              placeholder="Фамилия"
             />
           </div>
 
