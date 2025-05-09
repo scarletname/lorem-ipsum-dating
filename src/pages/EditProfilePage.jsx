@@ -3,10 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 // Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
+let base_id = `1b306d89-f855-4027-9c49-7e0467b9fcbb`
 
 async function fetchData() {
   try {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/users/18781f64-aa34-447e-abef-4dc1b6674c48`);
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}`);
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
@@ -156,7 +157,7 @@ const EditProfilePage = () => {
 
       // Отправка данных на сервер
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/users/18781f64-aa34-447e-abef-4dc1b6674c48/profile`,
+        `${process.env.REACT_APP_API_URL}/users/${base_id}/profile`,
         {
           method: 'PATCH',
           headers: {
