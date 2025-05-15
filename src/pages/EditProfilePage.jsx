@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 // Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
-let base_id = `1b306d89-f855-4027-9c49-7e0467b9fcbb`
+let base_id = `a6e15e10-f75b-44f0-b567-aa04d48ccc0b`
 
 async function fetchData() {
   try {
@@ -64,6 +64,32 @@ const EditProfilePage = () => {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const uploadPhoto = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+  
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`, {
+        method: 'POST',
+        body: formData
+      });
+  
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки фото');
+      }
+  
+      const data = await response.json();
+      console.log('Фото успешно загружено:', data);
+      return data;
+    } catch (error) {
+      console.error('Ошибка при загрузке фото:', error);
+      alert('Не удалось загрузить фото');
+      return null;
+    }
+  };
+  
+
+
   useEffect(() => {
     const loadData = async () => {
       // Пытаемся загрузить данные с сервера
@@ -91,7 +117,7 @@ const EditProfilePage = () => {
         };
         
         setFormData(formattedData);
-        setPhotoPreview(formattedData.photo);
+        setPhotoPreview(formattedData.photo?.url || null);
         setAge(formattedData.age);
       } else {
         // Если данных нет ниоткуда, используем localStorage или заглушку
@@ -118,15 +144,27 @@ const EditProfilePage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-        setFormData((prev) => ({ ...prev, photo: reader.result }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+  
+    // Локальный preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  
+    // Загрузка на сервер
+    const uploadedUrl = await uploadPhoto(file);
+    if (uploadedUrl) {
+      setFormData((prev) => ({
+        ...prev,
+        photo: { url: uploadedUrl }, // сохраняем URL
+      }));
+      setPhotoPreview(uploadedUrl); // заменим локальный preview на настоящий URL
+    } else {
+      alert('Не удалось загрузить фото');
     }
   };
 
@@ -215,11 +253,11 @@ const EditProfilePage = () => {
       <div className="relative w-full max-w-[500px] mx-auto">
         {/* Аватар с возможностью загрузки */}
         <div
-          className="w-full aspect-square bg-gray-300 flex items-center justify-center rounded-[15px] cursor-pointer"
+          className="w-full aspect-square bg-gray-300 flex items-center justify-center  cursor-pointer"
           onClick={() => document.getElementById('photoInput').click()}
         >
           {photoPreview ? (
-            <img src={photoPreview} alt="Profile" className="w-full h-full object-cover rounded-[15px]" />
+            <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
           ) : (
             <span className="text-gray-600 text-sm">Нет фото</span>
           )}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 // Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
-let base_id = `1b306d89-f855-4027-9c49-7e0467b9fcbb`
+let base_id = `a6e15e10-f75b-44f0-b567-aa04d48ccc0b`
 
 
 async function fetchData() {
@@ -14,6 +14,19 @@ async function fetchData() {
       throw new Error('Network response was not ok');
     }
     const data = await response.json();
+
+    // Загружаем фото пользователя
+    const photosRes = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`);
+    const photosData = photosRes.ok ? await photosRes.json() : [];
+
+    // Добавим фото в userData
+    data.photos = photosData;
+
+    // Можно также найти primary фото
+    const primaryPhoto = photosData.length > 0 ? photosData[0] : null;
+    data.photo = primaryPhoto?.id || null;
+
+
     // Заполняем mockUsers полученными данными
     mockUsers = [data];
     return data;
@@ -43,7 +56,7 @@ const ProfilePage = () => {
         const savedData = localStorage.getItem('updatedUser');
         setUser(savedData ? JSON.parse(savedData) : {
           id: 1,
-          name: 'Имя Фамилия',
+          name: 'Имя',
           gender: 'М',
           age: 18,
           personality: 'INTP',
@@ -77,6 +90,8 @@ const ProfilePage = () => {
     return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
   }
 
+  const photoUrl = user?.photos?.[0]?.url || null;
+
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
       {/* Остальной JSX остается таким же, но используем user из состояния */}
@@ -90,9 +105,9 @@ const ProfilePage = () => {
       
 
       <div className="relative w-full max-w-[500px] mx-auto">
-        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center rounded-[15px]">
-          {user.photo ? (
-            <img src={user.photo} alt="Profile" className="w-full h-full object-cover rounded-[15px]" />
+        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center">
+          {photoUrl ? (
+            <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
           ) : (
             <span className="text-gray-600 text-sm">Нет фото</span>
           )}
