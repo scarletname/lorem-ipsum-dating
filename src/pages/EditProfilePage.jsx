@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-// Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
-let base_id = `a6e15e10-f75b-44f0-b567-aa04d48ccc0b`
+let base_id = `9e87d89d-8113-4728-aeca-d774842dfd52`;
 
 async function fetchData() {
   try {
@@ -12,7 +11,11 @@ async function fetchData() {
       throw new Error('Network response was not ok');
     }
     const data = await response.json();
-    // Заполняем mockUsers полученными данными
+
+    const photosRes = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`);
+    const photosData = photosRes.ok ? await photosRes.json() : [];
+
+    data.photos = photosData;
     mockUsers = [data];
     return data;
   } catch (error) {
@@ -25,8 +28,8 @@ const EditProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: locationUser } = location.state || {};
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Функция для вычисления возраста на основе даты рождения
   const calculateAge = (birthDate) => {
     if (!birthDate || !/^\d{2}\.\d{2}\.\d{4}$/.test(birthDate)) return '';
     const [day, month, year] = birthDate.split('.').map(Number);
@@ -40,7 +43,6 @@ const EditProfilePage = () => {
     return age;
   };
 
-  // Функция для преобразования даты в формат ISO
   const formatDateToISO = (dateString) => {
     if (!dateString || !/^\d{2}\.\d{2}\.\d{4}$/.test(dateString)) return null;
     const [day, month, year] = dateString.split('.');
@@ -56,12 +58,11 @@ const EditProfilePage = () => {
     personality: 'INTP',
     createdAt: '',
     age: '',
-    photo: null,
+    photos: [],
     about_myself: '',
     surname: ''
   });
   const [age, setAge] = useState('');
-  const [photoPreview, setPhotoPreview] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const uploadPhoto = async (file) => {
@@ -69,37 +70,34 @@ const EditProfilePage = () => {
     formData.append('file', file);
   
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/addphoto`, {
         method: 'POST',
         body: formData
       });
   
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки фото');
-      }
-  
-      const data = await response.json();
-      console.log('Фото успешно загружено:', data);
-      return data;
+      if (!response.ok) throw new Error('Ошибка загрузки фото');
+      return await response.json();
     } catch (error) {
       console.error('Ошибка при загрузке фото:', error);
       alert('Не удалось загрузить фото');
       return null;
     }
   };
-  
 
+  const handlePrevImage = () => {
+    setCurrentImageIndex(prev => (prev === 0 ? formData.photos.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex(prev => (prev === formData.photos.length - 1 ? 0 : prev + 1));
+  };
 
   useEffect(() => {
     const loadData = async () => {
-      // Пытаемся загрузить данные с сервера
       const serverData = await fetchData();
-      
-      // Проверяем, есть ли данные в mockUsers (заполненные fetchData)
       const userData = serverData || mockUsers[0] || locationUser;
       
       if (userData) {
-        // Преобразуем данные API в наш формат
         const formattedData = {
           name: userData.name || '',
           surname: userData.surname || '',
@@ -112,20 +110,17 @@ const EditProfilePage = () => {
             new Date(userData.created_at).toLocaleDateString('ru-RU') : '04.04.25',
           age: userData.birth_date ? 
             calculateAge(new Date(userData.birth_date).toLocaleDateString('ru-RU')) : '',
-          photo: userData.photos?.[0] || null,
+          photos: userData.photos || [],
           about_myself: userData.about_myself || ''
         };
         
         setFormData(formattedData);
-        setPhotoPreview(formattedData.photo?.url || null);
         setAge(formattedData.age);
       } else {
-        // Если данных нет ниоткуда, используем localStorage или заглушку
         const savedData = localStorage.getItem('updatedUser');
         if (savedData) {
           const parsedData = JSON.parse(savedData);
           setFormData(parsedData);
-          setPhotoPreview(parsedData.photo);
           setAge(calculateAge(parsedData.birthDate));
         }
       }
@@ -148,23 +143,39 @@ const EditProfilePage = () => {
     const file = e.target.files[0];
     if (!file) return;
   
-    // Локальный preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-  
-    // Загрузка на сервер
-    const uploadedUrl = await uploadPhoto(file);
-    if (uploadedUrl) {
-      setFormData((prev) => ({
+    const uploadedPhoto = await uploadPhoto(file);
+    if (uploadedPhoto) {
+      setFormData(prev => ({
         ...prev,
-        photo: { url: uploadedUrl }, // сохраняем URL
+        photos: [...prev.photos, uploadedPhoto]
       }));
-      setPhotoPreview(uploadedUrl); // заменим локальный preview на настоящий URL
-    } else {
-      alert('Не удалось загрузить фото');
+      setCurrentImageIndex(formData.photos.length);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (formData.photos.length === 0) return;
+    
+    const photoId = formData.photos[currentImageIndex].id;
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/users/${base_id}/photos/${photoId}`,
+        { method: 'DELETE' }
+      );
+      
+      if (!response.ok) throw new Error('Ошибка удаления фото');
+      
+      setFormData(prev => {
+        const newPhotos = prev.photos.filter((_, i) => i !== currentImageIndex);
+        return { ...prev, photos: newPhotos };
+      });
+      
+      setCurrentImageIndex(prev => 
+        prev >= formData.photos.length - 1 && prev > 0 ? prev - 1 : 0
+      );
+    } catch (error) {
+      console.error('Ошибка при удалении фото:', error);
+      alert('Не удалось удалить фото');
     }
   };
 
@@ -182,7 +193,6 @@ const EditProfilePage = () => {
         gender: formData.gender === 'М' ? 'MALE' : 'FEMALE'
       };
 
-      // Подготовка данных для отправки на сервер
       const apiData = {
         name: updatedData.name,
         surname: updatedData.surname,
@@ -193,7 +203,6 @@ const EditProfilePage = () => {
         jung_last_attempt: new Date().toISOString()
       };
 
-      // Отправка данных на сервер
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/users/${base_id}/profile`,
         {
@@ -209,10 +218,7 @@ const EditProfilePage = () => {
         throw new Error('Ошибка при сохранении данных');
       }
 
-      // Сохраняем в localStorage
       localStorage.setItem('updatedUser', JSON.stringify(updatedData));
-      
-      // Перенаправляем на страницу профиля
       navigate('/profile', { state: { updatedUser: updatedData } });
     } catch (error) {
       console.error('Ошибка при сохранении:', error);
@@ -236,31 +242,123 @@ const EditProfilePage = () => {
   if (isLoading) {
     return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
   }
-
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
-      {/* Шапка */}
       <header className="fixed top-0 left-0 right-0 bg-black z-10">
         <div className="flex justify-center px-4 py-2">
           <span className="text-white font-bold text-xl">Мой профиль</span>
         </div>
       </header>
 
-      {/* Отступ сверху под шапку */}
       <div className="mt-10" />
 
-      {/* Контейнер для фото и линии */}
       <div className="relative w-full max-w-[500px] mx-auto">
-        {/* Аватар с возможностью загрузки */}
-        <div
-          className="w-full aspect-square bg-gray-300 flex items-center justify-center  cursor-pointer"
-          onClick={() => document.getElementById('photoInput').click()}
-        >
-          {photoPreview ? (
-            <img src={photoPreview} alt="Profile" className="w-full h-full object-cover" />
+        <div className="relative w-full pt-[100%] bg-gray-300">
+          {/* Кнопки добавления и удаления в верхней части */}
+          <div className="absolute top-2 right-2 z-20 flex gap-2">
+            <button
+              onClick={() => document.getElementById('photoInput').click()}
+              className="bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+            </button>
+            
+            {formData.photos.length > 0 && (
+              <button
+                onClick={handleRemovePhoto}
+                className="bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Карусель фотографий */}
+          {formData.photos.length > 0 ? (
+            <>
+              <img 
+                src={formData.photos[currentImageIndex].url} 
+                alt="Profile" 
+                className="absolute top-0 left-0 w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = '/assets/images/placeholder.jpg';
+                }}
+              />
+              {formData.photos.length > 1 && (
+                <>
+                  <button
+                    onClick={handlePrevImage}
+                    className="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleNextImage}
+                    className="absolute top-1/2 right-2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </>
           ) : (
-            <span className="text-gray-600 text-sm">Нет фото</span>
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+              <span className="text-gray-600 text-sm">Нет фото</span>
+            </div>
           )}
+
           <input
             id="photoInput"
             type="file"
@@ -270,10 +368,8 @@ const EditProfilePage = () => {
           />
         </div>
 
-        {/* Простая линия */}
         <div className="absolute bottom-0 w-full border-b-2 border-black" />
 
-        {/* Кнопка "Сохранить" */}
         <div className="absolute bottom-0 right-[35px] transform translate-y-1/2 z-10">
           <button
             onClick={handleSave}
@@ -304,15 +400,12 @@ const EditProfilePage = () => {
         </div>
       </div>
 
-      {/* Контент редактирования */}
       <div className="w-[90%] max-w-[500px] mx-auto flex flex-col gap-2 mt-1">
         <div className="flex flex-col text-left">
           <p className="text-gray-600 text-sm">Создано: {formData.createdAt}</p>
         </div>
 
-        {/* Поля ввода */}
         <div className="flex flex-col gap-2 mt-2">
-          {/* Имя */}
           <div>
             <label className="block text-gray-600 text-sm mb-1">Имя</label>
             <input
@@ -325,7 +418,6 @@ const EditProfilePage = () => {
             />
           </div>
 
-          {/* Фамилия */}
           <div>
             <label className="block text-gray-600 text-sm mb-1">Фамилия</label>
             <input
@@ -338,9 +430,7 @@ const EditProfilePage = () => {
             />
           </div>
 
-          {/* Пол и Дата рождения с возрастом */}
           <div className="flex gap-4">
-            {/* Пол */}
             <div className="flex-1">
               <label className="block text-gray-600 text-sm mb-1">Пол:</label>
               <div className="flex gap-4">
@@ -368,7 +458,6 @@ const EditProfilePage = () => {
                 </label>
               </div>
             </div>
-            {/* Дата рождения и возраст */}
             <div className="flex-1">
               <label className="block text-gray-600 text-sm mb-1">Дата рождения:</label>
               <input
@@ -385,7 +474,6 @@ const EditProfilePage = () => {
             </div>
           </div>
 
-          {/* О себе */}
           <div>
             <label className="block text-gray-600 text-sm mb-1">О себе</label>
             <textarea
@@ -397,7 +485,6 @@ const EditProfilePage = () => {
             />
           </div>
 
-          {/* Тип Юнга */}
           <div className="flex gap-4 items-end">
             <div className="flex-1">
               <label className="block text-gray-600 text-sm mb-1">Тип Юнга:</label>
@@ -424,7 +511,6 @@ const EditProfilePage = () => {
         </div>
       </div>
 
-      {/* Нижний отступ (footer placeholder) */}
       <div className="h-20" />
     </div>
   );

@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 
 // Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
-let base_id = `a6e15e10-f75b-44f0-b567-aa04d48ccc0b`
-
+let base_id = `9e87d89d-8113-4728-aeca-d774842dfd52`;
 
 async function fetchData() {
   try {
-    //const response = await fetch(`${process.env.REACT_APP_API_URL}/users/18781f64-aa34-447e-abef-4dc1b6674c48`);
     const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}`);
     if (!response.ok) {
       throw new Error('Network response was not ok');
@@ -26,13 +24,11 @@ async function fetchData() {
     const primaryPhoto = photosData.length > 0 ? photosData[0] : null;
     data.photo = primaryPhoto?.id || null;
 
-
     // Заполняем mockUsers полученными данными
     mockUsers = [data];
     return data;
   } catch (error) {
     console.error("Ошибка запроса:", error);
-    // Возвращаем null или можно вернуть заглушку
     return null;
   }
 }
@@ -41,18 +37,15 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
-      // Пытаемся загрузить данные с сервера
       await fetchData();
       
-      // Проверяем, есть ли данные в mockUsers (заполненные fetchData)
       if (mockUsers.length > 0) {
-        // Используем данные с сервера как приоритетные
         setUser(mockUsers[0]);
       } else {
-        // Если данных с сервера нет, используем localStorage или заглушку
         const savedData = localStorage.getItem('updatedUser');
         setUser(savedData ? JSON.parse(savedData) : {
           id: 1,
@@ -61,7 +54,6 @@ const ProfilePage = () => {
           age: 18,
           personality: 'INTP',
           description: 'Обожаю весёлые компании...',
-          // другие поля по умолчанию
         });
       }
       setIsLoading(false);
@@ -69,7 +61,6 @@ const ProfilePage = () => {
 
     loadData();
 
-    // Обработчик изменений в localStorage
     const handleStorageChange = () => {
       const savedData = localStorage.getItem('updatedUser');
       if (savedData) {
@@ -86,15 +77,24 @@ const ProfilePage = () => {
     navigate('/edit-profile', { state: { user } });
   };
 
+  const handlePrevImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? user.photos.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === user.photos.length - 1 ? 0 : prev + 1
+    );
+  };
+
   if (isLoading || !user) {
     return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
   }
 
-  const photoUrl = user?.photos?.[0]?.url || null;
-
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
-      {/* Остальной JSX остается таким же, но используем user из состояния */}
       <header className="fixed top-0 left-0 right-0 bg-black z-10">
         <div className="flex justify-center px-4 py-2">
           <span className="text-white font-bold text-xl">Мой профиль</span>
@@ -102,14 +102,66 @@ const ProfilePage = () => {
       </header>
 
       <div className="mt-10" />
-      
 
       <div className="relative w-full max-w-[500px] mx-auto">
-        <div className="w-full aspect-square bg-gray-300 flex items-center justify-center">
-          {photoUrl ? (
-            <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
+        <div className="relative w-full pt-[100%] bg-gray-300">
+          {user.photos && user.photos.length > 0 ? (
+            <>
+              <img 
+                src={user.photos[currentImageIndex].url} 
+                alt="Profile" 
+                className="absolute top-0 left-0 w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = '/assets/images/placeholder.jpg';
+                }}
+              />
+              {user.photos.length > 1 && (
+                <>
+                  <button
+                    onClick={handlePrevImage}
+                    className="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleNextImage}
+                    className="absolute top-1/2 right-2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </>
           ) : (
-            <span className="text-gray-600 text-sm">Нет фото</span>
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+              <span className="text-gray-600 text-sm">Нет фото</span>
+            </div>
           )}
         </div>
 
@@ -143,7 +195,6 @@ const ProfilePage = () => {
             {user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
           </p>
           <p className="text-gray-600 text-sm mt-1">{user.about_myself}</p>
-          {/* <p className="text-gray-600 text-sm">Создано: {user.created_at}</p> */}
         </div>
       </div>
     </div>
