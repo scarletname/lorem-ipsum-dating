@@ -10,7 +10,7 @@ const FALLBACK_TOKEN = 'eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJPcDJh
 
 async function fetchData() {
   const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
-  
+
   try {
     // Запрос данных пользователя
     const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}`, {
@@ -83,7 +83,7 @@ const ProfilePage = () => {
   useEffect(() => {
     const loadData = async () => {
       const data = await fetchData();
-      
+
       if (data) {
         setUser(data);
       } else {
@@ -110,7 +110,7 @@ const ProfilePage = () => {
         setUser(JSON.parse(savedData));
       }
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
@@ -156,9 +156,9 @@ const ProfilePage = () => {
         <div className="relative w-full pt-[100%] bg-gray-300">
           {user.photos && user.photos.length > 0 ? (
             <>
-              <img 
-                src={user.photos[currentImageIndex].url} 
-                alt="Profile" 
+              <img
+                src={user.photos[currentImageIndex].url}
+                alt="Profile"
                 className="absolute top-0 left-0 w-full h-full object-cover"
                 onError={(e) => {
                   e.target.src = '/assets/images/placeholder.jpg';
@@ -241,7 +241,7 @@ const ProfilePage = () => {
         <div className="flex flex-col text-left">
           <h2 className="text-[32px] font-bold">{user.name}</h2>
           <p className="text-[20px] text-gray-600 mt-2">
-            {user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
+            {user.gender === 'MALE' ? 'М' : user.gender === 'FEMALE' ? 'Ж' : user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
           </p>
           <p className="text-gray-600 text-sm mt-1">{user.about_myself}</p>
           {user.tags && user.tags.length > 0 && (

@@ -112,28 +112,41 @@ const EditProfilePage = () => {
   };
 
   const uploadPhoto = async (file) => {
-    const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
-    const formData = new FormData();
-    formData.append('file', file);
+  const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
+  const formData = new FormData();
+  formData.append('photo', file); // Используем 'photo' вместо 'file'
 
-    try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/users/${base_id}/addphoto`, formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Ошибка при загрузке фото:', error.message);
-      if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data);
-      } else if (error.request) {
-        console.error('Возможная причина: CORS ошибка или сервер недоступен.');
-      }
-      alert('Не удалось загрузить фото');
-      return null;
+  try {
+    // Логируем информацию о файле для отладки
+    console.log('Загружаемый файл:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+
+    const response = await axios.post(`${process.env.REACT_APP_API_URL}/users/${base_id}/addphoto`, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Content-Type не указываем, axios автоматически установит multipart/form-data
+      },
+    });
+    console.log('Фото успешно загружено:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Ошибка при загрузке фото:', error.message);
+    if (error.response) {
+      console.error('Ответ сервера:', error.response.status, error.response.data);
+      alert(`Не удалось загрузить фото: ${error.response.data.message || `Ошибка ${error.response.status}`}`);
+    } else if (error.request) {
+      console.error('Запрос не отправлен. Возможная причина: CORS или сервер недоступен.', error.request);
+      alert('Не удалось загрузить фото: проблема с подключением к серверу');
+    } else {
+      console.error('Ошибка настройки запроса:', error.message);
+      alert(`Не удалось загрузить фото: ${error.message}`);
     }
-  };
+    return null;
+  }
+};
 
   const handleAddTag = async () => {
   const trimmedTag = newTag.trim();
@@ -391,7 +404,7 @@ const EditProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
-      <header className="fixed top-0 left-0 right-0 bg-black z-10">
+      <header className="fixed top-0 left-0 right-0 bg-black z-50">
         <div className="flex justify-center px-4 py-2">
           <span className="text-white font-bold text-xl">Мой профиль</span>
         </div>
