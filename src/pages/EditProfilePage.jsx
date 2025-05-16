@@ -1,25 +1,69 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 let mockUsers = [];
-let base_id = `9e87d89d-8113-4728-aeca-d774842dfd52`;
+let base_id = `ef8118af-1c5f-4c82-8a82-cd4f65986e15`;
+
+// Жестко закодированный токен как fallback
+const FALLBACK_TOKEN = 'eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJPcDJhNXZlcUdJSk9lQlFDeHZvVU9HNFFNaXlISTVDdVBxbk9EN3pEZjVVIn0.eyJleHAiOjE3NDczOTA2MzQsImlhdCI6MTc0NzM4ODgzNCwiYXV0aF90aW1lIjoxNzQ3MzQxOTAzLCJqdGkiOiJjMDJjZDZlNy05OWJmLTQzNTYtOGMzNy05MTI4MWJmY2U0MWUiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjE4MDgwL3JlYWxtcy9sb3JlbSIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJlZjgxMThhZi0xYzVmLTRjODItOGE4Mi1jZDRmNjU5ODZlMTUiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJvYXV0aF9wcm94eSIsInNpZCI6IjQ4ZDM0YzQ4LTQ3MjAtNDU4Ni1hODYyLTY0MzkxYzkxNGFlOSIsImFjciI6IjAiLCJhbGxvd2VkLW9yaWdpbnMiOlsiKiJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJkZWZhdWx0LXJvbGVzLWxvcmVtIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJhY2NvdW50Ijp7InJvbGVzIjpbIm1hbmFnZS1hY2NvdW50IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6InByb2ZpbGUgZW1haWwiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3QiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.XP6MXvF1s8SF5S45B72e6B0_Ocl9FR8M3A9ti6YUipStluvUUyEZ31T347LT5NWM995sPHmIepXp_1PKuSpqt179zT2fhIDmepwPw57R7miJIbxUj_oS4Pac4MxBktYl2FEgAXSeeDjP4QI9yggHDI2hpv7Of9eyz3Ts2RvEQaH3mLGu9JRWBJ026c961yN9LU93DE3p671X77zyr7pM45gY_NNsocxsATgfPKrxuMH7jICMSP4fXnGYLnd1dBI8OAUDvTp4Sw_N_u7iKLKepjaggcXgASaLu5sM4CbZbsCcd3-UXfyWrHdsuC9pSzrStcfPIcvVJnmzr3aRklcxQQ';
 
 async function fetchData() {
+  const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
+  
   try {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}`);
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
-    }
-    const data = await response.json();
+    // Запрос данных пользователя
+    const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    const data = userResponse.data;
 
-    const photosRes = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`);
-    const photosData = photosRes.ok ? await photosRes.json() : [];
+    // Запрос фотографий
+    let photosData = [];
+    try {
+      const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      photosData = photosResponse.data;
+    } catch (photoError) {
+      console.warn('Не удалось загрузить фотографии:', photoError.message);
+    }
+
+    // Запрос тегов
+    let tagsData = [];
+    try {
+      const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}/tags`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      tagsData = tagsResponse.data;
+    } catch (tagError) {
+      console.warn('Не удалось загрузить теги:', tagError.message);
+    }
 
     data.photos = photosData;
+    data.tags = tagsData.map(tag => ({
+      id: tag.id,
+      user_id: tag.user_id,
+      name: tag.value, // Маппинг value в name
+    })) || [];
     mockUsers = [data];
     return data;
   } catch (error) {
-    console.error("Ошибка запроса:", error);
+    console.error('Ошибка запроса:', error.message);
+    if (error.response) {
+      console.error('Ответ сервера:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('Возможная причина: CORS ошибка или сервер недоступен. Проверьте конфигурацию CORS на бэкенде.');
+    }
     return null;
   }
 }
@@ -29,6 +73,24 @@ const EditProfilePage = () => {
   const location = useLocation();
   const { user: locationUser } = location.state || {};
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [newTag, setNewTag] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    name: '',
+    gender: 'М',
+    birthDate: '',
+    description: '',
+    personality: 'INTP',
+    createdAt: '',
+    age: '',
+    photos: [],
+    about_myself: '',
+    surname: '',
+    tags: [],
+  });
+  const [age, setAge] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const calculateAge = (birthDate) => {
     if (!birthDate || !/^\d{2}\.\d{2}\.\d{4}$/.test(birthDate)) return '';
@@ -49,38 +111,104 @@ const EditProfilePage = () => {
     return `${year}-${month}-${day}T00:00:00Z`;
   };
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [formData, setFormData] = useState({
-    name: '',
-    gender: 'М',
-    birthDate: '',
-    description: '',
-    personality: 'INTP',
-    createdAt: '',
-    age: '',
-    photos: [],
-    about_myself: '',
-    surname: ''
-  });
-  const [age, setAge] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
   const uploadPhoto = async (file) => {
+    const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
     const formData = new FormData();
     formData.append('file', file);
-  
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/addphoto`, {
-        method: 'POST',
-        body: formData
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/users/${base_id}/addphoto`, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
-  
-      if (!response.ok) throw new Error('Ошибка загрузки фото');
-      return await response.json();
+      return response.data;
     } catch (error) {
-      console.error('Ошибка при загрузке фото:', error);
+      console.error('Ошибка при загрузке фото:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS ошибка или сервер недоступен.');
+      }
       alert('Не удалось загрузить фото');
       return null;
+    }
+  };
+
+  const handleAddTag = async () => {
+  const trimmedTag = newTag.trim();
+  if (!trimmedTag) {
+    alert('Тег не может быть пустым');
+    return;
+  }
+  if (trimmedTag.length > 50) {
+    alert('Тег не может быть длиннее 50 символов');
+    return;
+  }
+  if (!/^[a-zA-Zа-яА-Я0-9\s]+$/.test(trimmedTag)) {
+    alert('Тег может содержать только буквы, цифры и пробелы');
+    return;
+  }
+
+  const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
+  try {
+    const response = await axios.put(
+      `${process.env.REACT_APP_API_URL}/users/${base_id}/tag`,
+      { tag: trimmedTag }, // Изменено с { value: trimmedTag } на { tag: trimmedTag }
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    );
+
+    const addedTag = response.data;
+    setFormData(prev => ({
+      ...prev,
+      tags: [...(prev.tags || []), { ...addedTag, name: addedTag.value }],
+    }));
+    setNewTag('');
+  } catch (error) {
+    console.error('Ошибка при добавлении тега:', error.message);
+    let errorMessage = 'Не удалось добавить тег';
+    if (error.response) {
+      console.error('Ответ сервера:', error.response.status, error.response.data);
+      errorMessage = error.response.data.message || `Ошибка сервера: ${error.response.status}`;
+    } else if (error.request) {
+      console.error('Возможная причина: CORS ошибка или сервер недоступен.');
+      errorMessage = 'Проблема с подключением к серверу';
+    }
+    alert(errorMessage);
+  }
+};
+
+  
+
+  const handleRemoveTag = async (tagId) => {
+    const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
+    try {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/users/${base_id}/tags/${tagId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        tags: prev.tags.filter(tag => tag.id !== tagId),
+      }));
+    } catch (error) {
+      console.error('Ошибка при удалении тега:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+        alert(`Не удалось удалить тег: ${error.response.data.message || error.message}`);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS ошибка или сервер недоступен.');
+        alert('Не удалось удалить тег: проблема с подключением к серверу');
+      } else {
+        alert(`Не удалось удалить тег: ${error.message}`);
+      }
     }
   };
 
@@ -96,24 +224,28 @@ const EditProfilePage = () => {
     const loadData = async () => {
       const serverData = await fetchData();
       const userData = serverData || mockUsers[0] || locationUser;
-      
+
       if (userData) {
         const formattedData = {
           name: userData.name || '',
           surname: userData.surname || '',
           gender: userData.gender === 'MALE' ? 'М' : 'Ж',
-          birthDate: userData.birth_date ? 
-            new Date(userData.birth_date).toLocaleDateString('ru-RU') : '',
+          birthDate: userData.birth_date
+            ? new Date(userData.birth_date).toLocaleDateString('ru-RU')
+            : '',
           description: userData.about_myself || '',
           personality: userData.jung_result || 'INTP',
-          createdAt: userData.created_at ? 
-            new Date(userData.created_at).toLocaleDateString('ru-RU') : '04.04.25',
-          age: userData.birth_date ? 
-            calculateAge(new Date(userData.birth_date).toLocaleDateString('ru-RU')) : '',
+          createdAt: userData.created_at
+            ? new Date(userData.created_at).toLocaleDateString('ru-RU')
+            : '04.04.25',
+          age: userData.birth_date
+            ? calculateAge(new Date(userData.birth_date).toLocaleDateString('ru-RU'))
+            : '',
           photos: userData.photos || [],
-          about_myself: userData.about_myself || ''
+          about_myself: userData.about_myself || '',
+          tags: userData.tags || [],
         };
-        
+
         setFormData(formattedData);
         setAge(formattedData.age);
       } else {
@@ -123,6 +255,7 @@ const EditProfilePage = () => {
           setFormData(parsedData);
           setAge(calculateAge(parsedData.birthDate));
         }
+        setError('Не удалось загрузить данные с сервера. Используются локальные данные.');
       }
       setIsLoading(false);
     };
@@ -142,12 +275,12 @@ const EditProfilePage = () => {
   const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-  
+
     const uploadedPhoto = await uploadPhoto(file);
     if (uploadedPhoto) {
       setFormData(prev => ({
         ...prev,
-        photos: [...prev.photos, uploadedPhoto]
+        photos: [...prev.photos, uploadedPhoto],
       }));
       setCurrentImageIndex(formData.photos.length);
     }
@@ -155,27 +288,35 @@ const EditProfilePage = () => {
 
   const handleRemovePhoto = async () => {
     if (formData.photos.length === 0) return;
-    
+
+    const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
     const photoId = formData.photos[currentImageIndex].id;
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/users/${base_id}/photos/${photoId}`,
-        { method: 'DELETE' }
-      );
-      
-      if (!response.ok) throw new Error('Ошибка удаления фото');
-      
+      await axios.delete(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos/${photoId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
       setFormData(prev => {
         const newPhotos = prev.photos.filter((_, i) => i !== currentImageIndex);
         return { ...prev, photos: newPhotos };
       });
-      
-      setCurrentImageIndex(prev => 
+
+      setCurrentImageIndex(prev =>
         prev >= formData.photos.length - 1 && prev > 0 ? prev - 1 : 0
       );
     } catch (error) {
-      console.error('Ошибка при удалении фото:', error);
-      alert('Не удалось удалить фото');
+      console.error('Ошибка при удалении фото:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+        alert(`Не удалось удалить фото: ${error.response.data.message || error.message}`);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS ошибка или сервер недоступен.');
+        alert('Не удалось удалить фото: проблема с подключением к серверу');
+      } else {
+        alert(`Не удалось удалить фото: ${error.message}`);
+      }
     }
   };
 
@@ -184,13 +325,14 @@ const EditProfilePage = () => {
     e.preventDefault();
     setIsSaving(true);
 
+    const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
     try {
       const updatedAge = calculateAge(formData.birthDate);
       const updatedData = {
         ...formData,
         age: updatedAge !== '' ? updatedAge : formData.age,
         about_myself: formData.description,
-        gender: formData.gender === 'М' ? 'MALE' : 'FEMALE'
+        gender: formData.gender === 'М' ? 'MALE' : 'FEMALE',
       };
 
       const apiData = {
@@ -200,29 +342,33 @@ const EditProfilePage = () => {
         birth_date: formatDateToISO(updatedData.birthDate),
         about_myself: updatedData.description,
         jung_result: updatedData.personality,
-        jung_last_attempt: new Date().toISOString()
+        jung_last_attempt: new Date().toISOString(),
       };
 
-      const response = await fetch(
+      await axios.patch(
         `${process.env.REACT_APP_API_URL}/users/${base_id}/profile`,
+        apiData,
         {
-          method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify(apiData)
         }
       );
-
-      if (!response.ok) {
-        throw new Error('Ошибка при сохранении данных');
-      }
 
       localStorage.setItem('updatedUser', JSON.stringify(updatedData));
       navigate('/profile', { state: { updatedUser: updatedData } });
     } catch (error) {
-      console.error('Ошибка при сохранении:', error);
-      alert('Не удалось сохранить изменения. Пожалуйста, попробуйте снова.');
+      console.error('Ошибка при сохранении:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+        alert(`Не удалось сохранить изменения: ${error.response.data.message || error.message}`);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS ошибка или сервер недоступен.');
+        alert('Не удалось сохранить изменения: проблема с подключением к серверу');
+      } else {
+        alert(`Не удалось сохранить изменения: ${error.message}`);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -236,12 +382,13 @@ const EditProfilePage = () => {
     'INTP', 'INTJ', 'ENTP', 'ENTJ',
     'INFJ', 'INFP', 'ENFJ', 'ENFP',
     'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ',
-    'ISTP', 'ISFP', 'ESTP', 'ESFP'
+    'ISTP', 'ISFP', 'ESTP', 'ESFP',
   ];
 
   if (isLoading) {
     return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
   }
+
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
       <header className="fixed top-0 left-0 right-0 bg-black z-10">
@@ -252,9 +399,14 @@ const EditProfilePage = () => {
 
       <div className="mt-10" />
 
+      {error && (
+        <div className="w-[90%] max-w-[500px] mx-auto text-red-500 text-sm mb-2">
+          {error}
+        </div>
+      )}
+
       <div className="relative w-full max-w-[500px] mx-auto">
         <div className="relative w-full pt-[100%] bg-gray-300">
-          {/* Кнопки добавления и удаления в верхней части */}
           <div className="absolute top-2 right-2 z-20 flex gap-2">
             <button
               onClick={() => document.getElementById('photoInput').click()}
@@ -275,7 +427,7 @@ const EditProfilePage = () => {
                 />
               </svg>
             </button>
-            
+
             {formData.photos.length > 0 && (
               <button
                 onClick={handleRemovePhoto}
@@ -299,12 +451,11 @@ const EditProfilePage = () => {
             )}
           </div>
 
-          {/* Карусель фотографий */}
           {formData.photos.length > 0 ? (
             <>
-              <img 
-                src={formData.photos[currentImageIndex].url} 
-                alt="Profile" 
+              <img
+                src={formData.photos[currentImageIndex].url}
+                alt="Profile"
                 className="absolute top-0 left-0 w-full h-full object-cover"
                 onError={(e) => {
                   e.target.src = '/assets/images/placeholder.jpg';
@@ -507,6 +658,41 @@ const EditProfilePage = () => {
             >
               Тестирование
             </button>
+          </div>
+
+          <div>
+            <label className="block text-gray-600 text-sm mb-1">Теги:</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                className="flex-1 border-2 border-black rounded-[15px] p-2 text-black"
+                placeholder="Новый тег"
+              />
+              <button
+                onClick={handleAddTag}
+                className="bg-gray-200 text-gray-600 px-4 py-2 border-2 border-black rounded-[15px]"
+              >
+                Добавить
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {formData.tags.map(tag => (
+                <div
+                  key={tag.id}
+                  className="flex items-center bg-gray-200 rounded-[15px] px-3 py-1"
+                >
+                  <span className="text-gray-600 text-sm">{tag.name}</span>
+                  <button
+                    onClick={() => handleRemoveTag(tag.id)}
+                    className="ml-2 text-red-500 hover:text-red-700"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

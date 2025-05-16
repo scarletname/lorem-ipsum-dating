@@ -1,34 +1,74 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-// Изначально пустой массив, который будет заполнен данными с сервера
 let mockUsers = [];
-let base_id = `9e87d89d-8113-4728-aeca-d774842dfd52`;
+let base_id = `ef8118af-1c5f-4c82-8a82-cd4f65986e15`;
+
+// Жестко закодированный токен как fallback
+const FALLBACK_TOKEN = 'eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJPcDJhNXZlcUdJSk9lQlFDeHZvVU9HNFFNaXlISTVDdVBxbk9EN3pEZjVVIn0.eyJleHAiOjE3NDczOTA2MzQsImlhdCI6MTc0NzM4ODgzNCwiYXV0aF90aW1lIjoxNzQ3MzQxOTAzLCJqdGkiOiJjMDJjZDZlNy05OWJmLTQzNTYtOGMzNy05MTI4MWJmY2U0MWUiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjE4MDgwL3JlYWxtcy9sb3JlbSIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJlZjgxMThhZi0xYzVmLTRjODItOGE4Mi1jZDRmNjU5ODZlMTUiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJvYXV0aF9wcm94eSIsInNpZCI6IjQ4ZDM0YzQ4LTQ3MjAtNDU4Ni1hODYyLTY0MzkxYzkxNGFlOSIsImFjciI6IjAiLCJhbGxvd2VkLW9yaWdpbnMiOlsiKiJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJkZWZhdWx0LXJvbGVzLWxvcmVtIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJhY2NvdW50Ijp7InJvbGVzIjpbIm1hbmFnZS1hY2NvdW50IiwibWFuYWdlLWFjY291bnQtbGlua3MiLCJ2aWV3LXByb2ZpbGUiXX19LCJzY29wZSI6InByb2ZpbGUgZW1haWwiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3QiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20ifQ.XP6MXvF1s8SF5S45B72e6B0_Ocl9FR8M3A9ti6YUipStluvUUyEZ31T347LT5NWM995sPHmIepXp_1PKuSpqt179zT2fhIDmepwPw57R7miJIbxUj_oS4Pac4MxBktYl2FEgAXSeeDjP4QI9yggHDI2hpv7Of9eyz3Ts2RvEQaH3mLGu9JRWBJ026c961yN9LU93DE3p671X77zyr7pM45gY_NNsocxsATgfPKrxuMH7jICMSP4fXnGYLnd1dBI8OAUDvTp4Sw_N_u7iKLKepjaggcXgASaLu5sM4CbZbsCcd3-UXfyWrHdsuC9pSzrStcfPIcvVJnmzr3aRklcxQQ';
 
 async function fetchData() {
+  const token = localStorage.getItem('authToken') || FALLBACK_TOKEN;
+  
   try {
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}`);
-    if (!response.ok) {
-      throw new Error('Network response was not ok');
+    // Запрос данных пользователя
+    const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const data = userResponse.data;
+
+    // Запрос фотографий
+    let photosData = [];
+    try {
+      const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      photosData = photosResponse.data;
+    } catch (photoError) {
+      console.warn('Не удалось загрузить фотографии:', photoError.message);
     }
-    const data = await response.json();
 
-    // Загружаем фото пользователя
-    const photosRes = await fetch(`${process.env.REACT_APP_API_URL}/users/${base_id}/photos`);
-    const photosData = photosRes.ok ? await photosRes.json() : [];
+    // Запрос тегов
+    let tagsData = [];
+    try {
+      const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${base_id}/tags`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      tagsData = tagsResponse.data;
+    } catch (tagError) {
+      console.warn('Не удалось загрузить теги:', tagError.message);
+    }
 
-    // Добавим фото в userData
     data.photos = photosData;
+    data.tags = tagsData.map(tag => ({
+      id: tag.id,
+      user_id: tag.user_id,
+      name: tag.value, // Маппинг value в name
+    })) || [];
 
-    // Можно также найти primary фото
     const primaryPhoto = photosData.length > 0 ? photosData[0] : null;
     data.photo = primaryPhoto?.id || null;
 
-    // Заполняем mockUsers полученными данными
     mockUsers = [data];
     return data;
   } catch (error) {
-    console.error("Ошибка запроса:", error);
+    console.error('Ошибка запроса:', error.message);
+    if (error.response) {
+      console.error('Ответ сервера:', error.response.status, error.response.data);
+    } else if (error.request) {
+      console.error('Возможная причина: CORS ошибка или сервер недоступен. Проверьте конфигурацию CORS на бэкенде.');
+    }
     return null;
   }
 }
@@ -38,13 +78,14 @@ const ProfilePage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
-      await fetchData();
+      const data = await fetchData();
       
-      if (mockUsers.length > 0) {
-        setUser(mockUsers[0]);
+      if (data) {
+        setUser(data);
       } else {
         const savedData = localStorage.getItem('updatedUser');
         setUser(savedData ? JSON.parse(savedData) : {
@@ -54,7 +95,9 @@ const ProfilePage = () => {
           age: 18,
           personality: 'INTP',
           description: 'Обожаю весёлые компании...',
+          tags: [],
         });
+        setError('Не удалось загрузить данные с сервера. Используются локальные данные.');
       }
       setIsLoading(false);
     };
@@ -102,6 +145,12 @@ const ProfilePage = () => {
       </header>
 
       <div className="mt-10" />
+
+      {error && (
+        <div className="w-[90%] max-w-[500px] mx-auto text-red-500 text-sm mb-2">
+          {error}
+        </div>
+      )}
 
       <div className="relative w-full max-w-[500px] mx-auto">
         <div className="relative w-full pt-[100%] bg-gray-300">
@@ -195,6 +244,18 @@ const ProfilePage = () => {
             {user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
           </p>
           <p className="text-gray-600 text-sm mt-1">{user.about_myself}</p>
+          {user.tags && user.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {user.tags.map(tag => (
+                <span
+                  key={tag.id}
+                  className="bg-gray-200 rounded-[15px] px-3 py-1 text-gray-600 text-sm"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

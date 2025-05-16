@@ -12,9 +12,11 @@ const SettingsPage = () => {
         pb: 7, // Отступ снизу для навигации
       }}
     >
-      <Typography variant="h4">хуй</Typography>
+      <Typography variant="h4"></Typography>
     </Box>
   );
 };
 
 export default SettingsPage;
+
+
