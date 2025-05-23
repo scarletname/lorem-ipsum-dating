@@ -1,16 +1,16 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Home from './pages/Home';
 import ProfilePage from './pages/ProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
-import SettingsPage from './pages/SettingsPage';
+import SwipesPage from './pages/SwipesPage';
 import LoginPage from './pages/LoginPage';
+import CallbackPage from './pages/CallbackPage';
 import NavigationBar from './components/NavigationBar';
 
 // Компонент для рендеринга навигации на нужных страницах
 const Layout = ({ children }) => {
   const location = useLocation();
-  console.log('Current location in Layout:', location.pathname);
-  const showNavigation = !['/login'].includes(location.pathname);
+  const showNavigation = !['/login', '/code_callback'].includes(location.pathname);
 
   return (
     <>
@@ -24,8 +24,10 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Home />} /> {/* Убрано перенаправление на /login */}
+        <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/"
+          path="/home"
           element={
             <Layout>
               <Home />
@@ -52,13 +54,11 @@ function App() {
           path="/settings"
           element={
             <Layout>
-              <SettingsPage />
+              <SwipesPage />
             </Layout>
           }
         />
-        <Route path="/login" element={<LoginPage />} />
-        {/* Добавим редирект для некорректных маршрутов */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/code_callback" element={<CallbackPage />} />
       </Routes>
     </Router>
   );

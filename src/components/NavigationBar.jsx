@@ -10,7 +10,7 @@ const NavigationBar = () => {
   const getActiveTab = () => {
     if (location.pathname === '/' || location.pathname === '/home') return 'search';
     if (location.pathname === '/profile' || location.pathname === '/edit-profile') return 'profile'; // Добавлен /edit-profile
-    if (location.pathname === '/settings') return 'settings';
+    if (location.pathname === '/swipes') return 'swipes';
     return 'search';
   };
 
@@ -36,10 +36,10 @@ const NavigationBar = () => {
         <img src={ProfileIcon} alt="Profile" className="w-6 h-6" />
       </button>
       <button
-        onClick={(e) => handleNavigation('/settings', e)}
-        className={`flex flex-col items-center p-2 rounded-full ${activeTab === 'settings' ? 'bg-[#66CC99] text-white' : 'text-gray-500'}`}
+        onClick={(e) => handleNavigation('/swipes', e)}
+        className={`flex flex-col items-center p-2 rounded-full ${activeTab === 'swipes' ? 'bg-[#66CC99] text-white' : 'text-gray-500'}`}
       >
-        <img src={SettingsIcon} alt="Settings" className="w-6 h-6" />
+        <img src={SettingsIcon} alt="Swipes" className="w-6 h-6" />
       </button>
     </nav>
   );

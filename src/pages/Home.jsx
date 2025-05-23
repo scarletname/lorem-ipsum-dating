@@ -1,54 +1,202 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const mockUsers = [
-  {
-    id: 1,
-    name: 'Наталья',
-    gender: 'Ж',
-    age: 18,
-    personality: 'INTP',
-    description: 'Обожаю весёлые компании, спонтанные поездки и долгие разговоры обо всём на свете. Всегда готова к новым знакомствам, шуткам и приколюхам. Если ты любишь смеяться — нам по пути!',
-    images: [
-      '/assets/images/photo1.jpg',
-      '/assets/images/photo2.jpg',
-    ],
-  },
-];
-
-const Home = ({ token }) => {
+const Home = () => {
   const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const user = mockUsers[0];
-  const images = user.images;
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchRecommendations = async (limit = 50) => {
+    const authToken = sessionStorage.getItem('authToken');
+    if (!authToken) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      // Логируем URL для отладки
+      const recommendationUrl = `/api/v1/recommendation/fetch?limit=${limit}`;
+      console.log('Запрос рекомендаций по URL:', recommendationUrl);
+
+      // Получаем рекомендации (список ID пользователей)
+      const recommendationsResponse = await axios.get(recommendationUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+      const userIds = recommendationsResponse.data.users || [];
+
+      // Запрашиваем данные каждого пользователя
+      const userPromises = userIds.map(async (id) => {
+        try {
+          const userResponse = await axios.get(`/users/${id}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
+          });
+          const userData = userResponse.data;
+
+          // Запрашиваем фото пользователя
+          let photosData = [];
+          try {
+            const photosResponse = await axios.get(`/users/${id}/photos`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+              },
+            });
+            photosData = photosResponse.data || [];
+          } catch (photoError) {
+            console.warn(`Не удалось загрузить фото для пользователя ${id}:`, photoError.message);
+          }
+
+          // Запрашиваем теги пользователя
+          let tagsData = [];
+          try {
+            const tagsResponse = await axios.get(`/users/${id}/tags`, {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+              },
+            });
+            tagsData = tagsResponse.data || [];
+          } catch (tagError) {
+            console.warn(`Не удалось загрузить теги для пользователя ${id}:`, tagError.message);
+          }
+
+          return {
+            ...userData,
+            photos: photosData,
+            tags: tagsData.map(tag => ({
+              id: tag.id,
+              user_id: tag.user_id,
+              name: tag.value,
+            })),
+          };
+        } catch (error) {
+          console.error(`Ошибка загрузки данных пользователя ${id}:`, error.message);
+          return null;
+        }
+      });
+
+      const usersData = (await Promise.all(userPromises)).filter(user => user !== null);
+      setUsers(usersData);
+      setCurrentUserIndex(0);
+      setCurrentImageIndex(0);
+      setError(null);
+    } catch (error) {
+      console.error('Ошибка загрузки рекомендаций:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+        setError(`Не удалось загрузить рекомендации: ${error.response.data.message || error.message}`);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS или сервер недоступен.');
+        setError('Не удалось загрузить рекомендации: проблема с подключением к серверу');
+      } else {
+        setError(`Не удалось загрузить рекомендации: ${error.message}`);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecommendations();
+  }, []);
+
+  const handleSwipe = async (targetId, like) => {
+    const authToken = sessionStorage.getItem('authToken');
+    if (!authToken) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      await axios.post(`/swipes`, {
+        targetId,
+        like,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+
+      // Переходим к следующему пользователю
+      setCurrentUserIndex(prev => {
+        const nextIndex = prev + 1;
+        if (nextIndex >= users.length) {
+          // Если пользователи закончились, загружаем новые рекомендации
+          fetchRecommendations();
+          return 0;
+        }
+        return nextIndex;
+      });
+      setCurrentImageIndex(0);
+    } catch (error) {
+      console.error('Ошибка при свайпе:', error.message);
+      if (error.response) {
+        console.error('Ответ сервера:', error.response.status, error.response.data);
+        alert(`Не удалось выполнить свайп: ${error.response.data.message || error.message}`);
+      } else if (error.request) {
+        console.error('Возможная причина: CORS или сервер недоступен.');
+        alert('Не удалось выполнить свайп: проблема с подключением к серверу');
+      } else {
+        alert(`Не удалось выполнить свайп: ${error.message}`);
+      }
+    }
+  };
+
+  const handleLike = () => {
+    if (!sessionStorage.getItem('authToken')) {
+      navigate('/login');
+      return;
+    }
+    if (users[currentUserIndex]) {
+      handleSwipe(users[currentUserIndex].id, true);
+    }
+  };
+
+  const handleDislike = () => {
+    if (!sessionStorage.getItem('authToken')) {
+      navigate('/login');
+      return;
+    }
+    if (users[currentUserIndex]) {
+      handleSwipe(users[currentUserIndex].id, false);
+    }
+  };
 
   const handlePrevImage = () => {
     setCurrentImageIndex((prev) =>
-      prev === 0 ? images.length - 1 : prev - 1
+      prev === 0 ? (users[currentUserIndex]?.photos?.length - 1 || 0) : prev - 1
     );
   };
 
   const handleNextImage = () => {
     setCurrentImageIndex((prev) =>
-      prev === images.length - 1 ? 0 : prev + 1
+      prev === (users[currentUserIndex]?.photos?.length - 1 || 0) ? 0 : prev + 1
     );
   };
 
-  const handleLike = () => {
-    if (token) {
-      console.log('Лайк добавлен');
-    } else {
-      navigate('/login');
-    }
-  };
+  if (isLoading) {
+    return <div className="min-h-screen bg-white flex items-center justify-center">Загрузка...</div>;
+  }
 
-  const handleDislike = () => {
-    if (token) {
-      console.log('Дизлайк добавлен');
-    } else {
-      navigate('/login');
-    }
-  };
+  if (error || users.length === 0) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center">
+        <p className="text-red-500">{error || 'Нет доступных пользователей для просмотра'}</p>
+      </div>
+    );
+  }
+
+  const user = users[currentUserIndex];
+  const images = user.photos || [];
 
   return (
     <div className="min-h-screen bg-white flex flex-col pb-14">
@@ -65,7 +213,7 @@ const Home = ({ token }) => {
           {images.length > 0 ? (
             <div className="relative w-full pt-[100%]">
               <img
-                src={images[currentImageIndex]}
+                src={images[currentImageIndex]?.url}
                 alt={user.name}
                 className="absolute top-0 left-0 w-full h-full object-cover bg-gray-300 rounded-t-lg"
                 onError={(e) => {
@@ -123,11 +271,23 @@ const Home = ({ token }) => {
 
           <div className="p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold">
-              {user.name}, {user.gender}, {user.age} лет, {user.personality}
+              {user.name}, {user.gender === 'MALE' ? 'М' : user.gender === 'FEMALE' ? 'Ж' : user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
             </h2>
             <p className="text-gray-600 mt-2 text-sm sm:text-base">
-              {user.description}
+              {user.about_myself || 'Нет описания'}
             </p>
+            {user.tags && user.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {user.tags.map(tag => (
+                  <span
+                    key={tag.id}
+                    className="bg-gray-200 rounded-[15px] px-3 py-1 text-gray-600 text-sm"
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-center gap-4 pb-4">
