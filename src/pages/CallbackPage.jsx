@@ -73,7 +73,7 @@ const CallbackPage = () => {
       }
 
       try {
-        const url = `http://192.168.97.8/auth/callback?grant_type=authorization_code&code=${encodeURIComponent(code)}`;
+        const url = `http://192.168.1.50/auth/callback?code=${encodeURIComponent(code)}`;
         const response = await axios.post(url, null, {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           timeout: 10000,

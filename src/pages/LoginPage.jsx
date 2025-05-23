@@ -5,8 +5,7 @@ const LoginPage = () => {
 
   const handleLogin = () => {
     try {
-      const redirectUri = 'http://localhost:3000/auth/callback';
-      const authUrl = `${process.env.REACT_APP_AUTHORIZATION_URL}?redirect_uri=${encodeURIComponent(redirectUri)}&state=state&nonce=nonce`;
+      const authUrl = `${process.env.REACT_APP_AUTHORIZATION_URL}`;
       console.log('Сформированный authUrl:', authUrl); // Отладка
       console.log('REACT_APP_AUTHORIZATION_URL:', process.env.REACT_APP_AUTHORIZATION_URL); // Отладка
       window.location.href = authUrl;
