@@ -10,13 +10,11 @@ const ProfilePage = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState(null);
 
-  // Декодирование токена для получения userId
   const decodeToken = (token) => {
     try {
       const payload = token.split('.')[1];
       const decodedPayload = atob(payload);
       const parsedPayload = JSON.parse(decodedPayload);
-      console.log('Полный декодированный Payload:', parsedPayload);
       return parsedPayload.sub || parsedPayload.id || parsedPayload.user_id;
     } catch (error) {
       console.error('Ошибка при декодировании токена:', error.message);
@@ -24,10 +22,8 @@ const ProfilePage = () => {
     }
   };
 
-  // Загрузка данных с сервера
   const fetchData = async (userId, token) => {
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-    const userUrl = `${baseUrl}/users/${userId}`;
+    const userUrl = `${process.env.REACT_APP_API_URL}/users/${userId}`;
 
     try {
       const userResponse = await axios.get(userUrl, {
@@ -35,32 +31,27 @@ const ProfilePage = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        timeout: 5000,
       });
       const data = userResponse.data;
 
-      // Загрузка фотографий
       let photosData = [];
       try {
-        const photosResponse = await axios.get(`${baseUrl}/users/${userId}/photos`, {
+        const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${userId}/photos`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
-          timeout: 5000,
         });
         photosData = photosResponse.data || [];
       } catch (photoError) {
         console.warn('Не удалось загрузить фотографии:', photoError.message);
       }
 
-      // Загрузка тегов
       let tagsData = [];
       try {
-        const tagsResponse = await axios.get(`${baseUrl}/users/${userId}/tags`, {
+        const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${userId}/tags`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
-          timeout: 5000,
         });
         tagsData = tagsResponse.data || [];
       } catch (tagError) {
@@ -78,11 +69,6 @@ const ProfilePage = () => {
       };
     } catch (error) {
       console.error('Ошибка запроса:', error.message);
-      if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data);
-      } else if (error.request) {
-        console.error('Возможная причина: CORS ошибка или сервер недоступен. Проверьте конфигурацию CORS на бэкенде.');
-      }
       return null;
     }
   };
@@ -103,13 +89,10 @@ const ProfilePage = () => {
         return;
       }
 
-      // Проверяем, переданы ли данные из EditProfilePage
       const { state } = location;
       if (state?.updatedUser) {
-        console.log('Данные получены из EditProfilePage:', state.updatedUser);
         setUser(state.updatedUser);
       } else {
-        // Пробуем загрузить данные с сервера
         const serverData = await fetchData(userId, token);
         if (serverData) {
           setUser({
@@ -120,7 +103,6 @@ const ProfilePage = () => {
             about_myself: serverData.about_myself || '',
           });
         } else {
-          // Используем данные из localStorage или дефолтные
           const savedData = localStorage.getItem('updatedUser');
           setUser(savedData ? JSON.parse(savedData) : {
             name: '',

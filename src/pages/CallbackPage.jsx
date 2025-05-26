@@ -14,39 +14,48 @@ const decodeToken = (token) => {
   }
 };
 
-const createOrCheckUserProfile = async (userId, token, baseUrl) => {
-  const checkUrl = `${baseUrl}/users/${userId}`;
-  console.log('Проверка профиля для userId:', userId);
-
+const createOrCheckUserProfile = async (userId, token) => {
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
   try {
-    // Проверяем существование профиля
-    await axios.get(checkUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      timeout: 10000,
-    });
-    console.log('Профиль уже существует для userId:', userId);
-    return true; // Профиль есть, ничего не создаём
+    const createUrl = `${process.env.REACT_APP_API_URL}/users`;
+    const userData = { id: userId, name: "Имя", surname: "Фамилия" };
+    await axios.post(createUrl, userData, { headers });
+    console.log('Профиль успешно создан для userId:', userId);
+    return true;
   } catch (error) {
-    if (error.response && error.response.status === 404) {
-      const createUrl = `${baseUrl}/users`;
-      const userData = { id: userId, name: "Имя", surname: "Фамилия" }; // Минимальные данные
-      console.log('Создание профиля для userId:', userId);
-      await axios.post(createUrl, userData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        timeout: 15000,
-      });
-      console.log('Профиль успешно создан для userId:', userId);
+    const checkUrl = `${process.env.REACT_APP_API_URL}/users/${userId}`;
+    console.log('Проверка профиля для userId:', userId);
+    if (error.response && error.response.status === 400) {
+      await axios.get(checkUrl, { headers });
       return true;
     } else {
-      console.error('Ошибка при проверке или создании профиля:', error.message, 'Config:', error.config);
+      console.error('Ошибка при проверке или создании профиля:', error.message);
       return false;
     }
+  }
+};
+
+const refreshToken = async (refreshToken) => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  try {
+    const refreshUrl = `${process.env.REACT_APP_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`;
+    const response = await axios.post(refreshUrl, null, { headers });
+    const tokens = response.data;
+    sessionStorage.setItem('authToken', tokens.access_token);
+    sessionStorage.setItem('refreshToken', tokens.refresh_token || '');
+    sessionStorage.setItem('tokenExpiresIn', tokens.expires_in || 0);
+    sessionStorage.setItem('refreshTokenExpiresIn', tokens.refresh_expires_in || 0);
+    return true;
+  } catch (error) {
+    console.error('Ошибка при обновлении токена:', error.message);
+    sessionStorage.clear();
+    window.location.href = '/login';
+    return false;
   }
 };
 
@@ -58,72 +67,55 @@ const CallbackPage = () => {
 
   useEffect(() => {
     if (isProcessed.current) return;
-
     const handleCallback = async () => {
       isProcessed.current = true;
-
-      console.log('Текущий URL:', location.search);
       const params = new URLSearchParams(location.search);
       const code = params.get('code');
-      console.log('Извлечённый code из URL:', code);
-
       if (!code) {
         setError('Код авторизации отсутствует в URL');
         return;
       }
-
       try {
-        const url = `http://192.168.1.50/auth/callback?code=${encodeURIComponent(code)}`;
-        const response = await axios.post(url, null, {
+        const callbackUrl = `${process.env.REACT_APP_API_URL}/auth/callback?code=${encodeURIComponent(code)}`;
+        const response = await axios.post(callbackUrl, null, {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          timeout: 10000,
         });
-        console.log('Полный ответ от сервера:', response.data);
-
         const tokens = response.data;
-        console.log('Полученные токены:', tokens);
-
         sessionStorage.setItem('authToken', tokens.access_token);
-        sessionStorage.setItem('refreshToken', tokens.refresh_token || '');
-        sessionStorage.setItem('tokenExpiresIn', tokens.expires_in || 0);
-        sessionStorage.setItem('refreshTokenExpiresIn', tokens.refresh_expires_in || 0);
-
+        sessionStorage.setItem('refreshToken', tokens.refresh_token);
+        sessionStorage.setItem('tokenExpiresIn', tokens.expires_in);
+        sessionStorage.setItem('refreshTokenExpiresIn', tokens.refresh_expires_in);
         const userId = decodeToken(tokens.access_token);
         if (userId) {
-          console.log('Сохранённый userId:', userId);
           sessionStorage.setItem('userId', userId);
-          const baseUrl = process.env.REACT_APP_API_URL;
-          const profileCreated = await createOrCheckUserProfile(userId, tokens.access_token, baseUrl);
+          const profileCreated = await createOrCheckUserProfile(userId, tokens.access_token);
           if (!profileCreated) {
             throw new Error('Не удалось создать или проверить профиль');
           }
 
-          setTimeout(() => navigate('/edit-profile'), 10000); // Задержка перед навигацией
+          const accessExpiresIn = tokens.expires_in * 1000;
+          setTimeout(() => {
+            const refreshTokenValue = sessionStorage.getItem('refreshToken');
+            if (refreshTokenValue) {
+              refreshToken(refreshTokenValue);
+            } else {
+              console.error('Refresh token отсутствует');
+              navigate('/login');
+            }
+          }, accessExpiresIn * 0.75);
+
+          navigate('/edit-profile');
         } else {
           throw new Error('Не удалось извлечь userId из токена');
         }
       } catch (error) {
-        console.error('Детали ошибки:', error.response?.status, error.response?.data);
-        let errorMessage = 'Неизвестная ошибка';
-        if (error.response?.data) {
-          if (error.response.data.error_description) {
-            errorMessage = error.response.data.error_description;
-          } else if (error.response.data.detail) {
-            errorMessage = JSON.stringify(error.response.data.detail);
-          } else {
-            errorMessage = JSON.stringify(error.response.data);
-          }
-        } else if (error.code === 'ECONNABORTED') {
-          errorMessage = 'Таймаут запроса, код истёк';
-        } else {
-          errorMessage = error.message;
-        }
-        setError('Не удалось получить токены: ' + errorMessage);
+        console.error('Ошибка в handleCallback:', error.message);
+        setError('Не удалось получить токены');
       }
     };
 
     handleCallback();
-  }, []);
+  }, [navigate, location]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">

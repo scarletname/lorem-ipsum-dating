@@ -8,7 +8,6 @@ const decodeToken = (token) => {
     const payload = token.split('.')[1];
     const decodedPayload = atob(payload);
     const parsedPayload = JSON.parse(decodedPayload);
-    console.log('Полный декодированный Payload:', parsedPayload);
     return parsedPayload.sub || parsedPayload.id || parsedPayload.user_id;
   } catch (error) {
     console.error('Ошибка при декодировании токена:', error.message);
@@ -16,71 +15,32 @@ const decodeToken = (token) => {
   }
 };
 
-// Функция для получения данных пользователя, фото и тегов
+// Функция для получения данных пользователя
 async function fetchData(userId) {
   const token = sessionStorage.getItem('authToken');
   if (!token) {
     throw new Error('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
   }
-
-  const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-  const userUrl = `${baseUrl}/users/${userId}`;
-  console.log('Полный URL запроса:', userUrl, 'с токеном:', token.substring(0, 10) + '...');
   try {
-    const userResponse = await axios.get(userUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      timeout: 5000,
+    const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${userId}`, {
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     });
-    console.log('Данные пользователя:', userResponse.data);
     const data = userResponse.data;
-
-    let photosData = [];
-    try {
-      const photosResponse = await axios.get(`${baseUrl}/users/${userId}/photos`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        timeout: 5000,
-      });
-      photosData = photosResponse.data || [];
-      console.log('Фотографии:', photosData);
-    } catch (photoError) {
-      console.warn('Не удалось загрузить фотографии:', photoError.message);
-    }
-
-    let tagsData = [];
-    try {
-      const tagsResponse = await axios.get(`${baseUrl}/users/${userId}/tags`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        timeout: 5000,
-      });
-      tagsData = tagsResponse.data || [];
-      console.log('Теги:', tagsData);
-    } catch (tagError) {
-      console.warn('Не удалось загрузить теги:', tagError.message);
-    }
+    const photos = data.photos || [];
+    const tags = data.tags || [];
+    // Определяем ID основной фотографии, сравнивая primary_photo (URL) с photos[i].url
+    const primaryPhotoId = photos.find(photo => photo.url === data.primary_photo)?.id || null;
 
     return {
       ...data,
-      photos: photosData,
-      tags: tagsData.map(tag => ({
-        id: tag.id,
-        user_id: tag.user_id,
-        name: tag.value,
-      })) || [],
+      primaryPhotoId,
+      photos: photos.map(photo => ({ id: photo.id, url: photo.url })),
+      tags: tags.map(tag => ({ id: tag.id, user_id: tag.user_id, name: tag.value })),
     };
   } catch (error) {
-    console.error('Ошибка запроса:', error.message, 'Config:', error.config);
-    if (error.response) {
-      console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-      if (error.response.status === 404) {
-        throw new Error('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-      }
+    console.error('Ошибка запроса:', error.message);
+    if (error.response?.status === 404) {
+      throw new Error('Ресурс не найден (404). Проверьте URL или эндпоинт.');
     }
     throw error;
   }
@@ -104,11 +64,17 @@ const EditProfilePage = () => {
     about_myself: '',
     surname: '',
     tags: [],
+    primaryPhotoId: null,
   });
   const [age, setAge] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [geoData, setGeoData] = useState(null);
+  const [geoError, setGeoError] = useState(null);
+  const [manualLatitude, setManualLatitude] = useState('');
+  const [manualLongitude, setManualLongitude] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
 
   useEffect(() => {
     const token = sessionStorage.getItem('authToken');
@@ -120,13 +86,11 @@ const EditProfilePage = () => {
     }
 
     const id = decodeToken(token);
-    console.log('Извлечённый userId из токена:', id);
     if (!id) {
       setError('Не удалось определить ID пользователя из токена.');
       setIsLoading(false);
       return;
     }
-
     setUserId(id);
   }, [navigate]);
 
@@ -137,9 +101,7 @@ const EditProfilePage = () => {
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
     return age.toString();
   };
 
@@ -160,27 +122,19 @@ const EditProfilePage = () => {
     formData.append('photo', file);
 
     try {
-      console.log('Загружаемый файл:', { name: file.name, size: file.size, type: file.type });
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-      const response = await axios.post(`${baseUrl}/users/${userId}/addphoto`, formData, {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/users/${userId}/addphoto`, formData, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 5000,
       });
-      console.log('Фото успешно загружено:', response.data);
-      return response.data;
+      return { id: response.data.id, url: response.data.url };
     } catch (error) {
-      console.error('Ошибка при загрузке фото:', error.message, 'Config:', error.config);
+      console.error('Ошибка при загрузке фото:', error.message);
       if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-        if (error.response.status === 404) {
-          alert('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-        } else if (error.response.status === 403) {
-          alert('Доступ запрещён (403). Проверьте права или CORS.');
-        } else {
-          alert(`Не удалось загрузить фото: ${error.response.data.message || `Ошибка ${error.response.status}`}`);
-        }
+        if (error.response.status === 404) alert('Ресурс не найден (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось загрузить фото: ${error.response.data.message || error.message}`);
       } else {
-        alert('Не удалось загрузить фото: проблема с подключением к серверу');
+        alert('Не удалось загрузить фото: проблема с подключением.');
       }
       return null;
     }
@@ -200,8 +154,7 @@ const EditProfilePage = () => {
     }
 
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-      const response = await axios.put(`${baseUrl}/users/${userId}/tag`, { tag: trimmedTag }, {
+      const response = await axios.put(`${process.env.REACT_APP_API_URL}/users/${userId}/tag`, { tag: trimmedTag }, {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         timeout: 5000,
       });
@@ -212,18 +165,13 @@ const EditProfilePage = () => {
       }));
       setNewTag('');
     } catch (error) {
-      console.error('Ошибка при добавлении тега:', error.message, 'Config:', error.config);
+      console.error('Ошибка при добавлении тега:', error.message);
       if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-        if (error.response.status === 404) {
-          alert('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-        } else if (error.response.status === 403) {
-          alert('Доступ запрещён (403). Проверьте права или CORS.');
-        } else {
-          alert(`Не удалось добавить тег: ${error.response.data.message || `Ошибка ${error.response.status}`}`);
-        }
+        if (error.response.status === 404) alert('Ресурс не найден (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось добавить тег: ${error.response.data.message || error.message}`);
       } else {
-        alert('Не удалось добавить тег: проблема с подключением к серверу');
+        alert('Не удалось добавить тег: проблема с подключением.');
       }
     }
   };
@@ -236,8 +184,7 @@ const EditProfilePage = () => {
     }
 
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-      await axios.delete(`${baseUrl}/users/${userId}/tags/${tagId}`, {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/users/${userId}/tags/${tagId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 5000,
       });
@@ -246,24 +193,51 @@ const EditProfilePage = () => {
         tags: prev.tags.filter(tag => tag.id !== tagId),
       }));
     } catch (error) {
-      console.error('Ошибка при удалении тега:', error.message, 'Config:', error.config);
+      console.error('Ошибка при удалении тега:', error.message);
       if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-        if (error.response.status === 404) {
-          alert('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-        } else if (error.response.status === 403) {
-          alert('Доступ запрещён (403). Проверьте права или CORS.');
-        } else {
-          alert(`Не удалось удалить тег: ${error.response?.data?.message || error.message}`);
-        }
+        if (error.response.status === 404) alert('Ресурс не найден (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось удалить тег: ${error.response.data.message || error.message}`);
       } else {
-        alert('Не удалось удалить тег: проблема с подключением к серверу');
+        alert('Не удалось удалить тег: проблема с подключением.');
       }
     }
   };
 
   const handlePrevImage = () => setCurrentImageIndex(prev => (prev === 0 ? formData.photos.length - 1 : prev - 1));
   const handleNextImage = () => setCurrentImageIndex(prev => (prev === formData.photos.length - 1 ? 0 : prev + 1));
+
+  const handleSetPrimaryPhoto = async () => {
+    if (!formData.photos.length) {
+      alert('Нет фотографий для назначения основной.');
+      return;
+    }
+    const photoId = formData.photos[currentImageIndex].id;
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
+      return;
+    }
+
+    try {
+      await axios.patch(
+        `${process.env.REACT_APP_API_URL}/users/${userId}/primary_photo`,
+        { id: photoId },
+        { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, timeout: 5000 }
+      );
+      setFormData(prev => ({ ...prev, primaryPhotoId: photoId }));
+      alert('Основная фотография успешно назначена!');
+    } catch (error) {
+      console.error('Ошибка при назначении основной фотографии:', error.message);
+      if (error.response) {
+        if (error.response.status === 404) alert('Фотография или пользователь не найдены (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось назначить основную фотографию: ${error.response.data.message || error.message}`);
+      } else {
+        alert('Не удалось назначить основную фотографию: проблема с подключением.');
+      }
+    }
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -283,9 +257,12 @@ const EditProfilePage = () => {
             photos: userData.photos || [],
             about_myself: userData.about_myself || '',
             tags: userData.tags || [],
+            primaryPhotoId: userData.primaryPhotoId || null,
           };
           setFormData(formattedData);
           setAge(formattedData.age);
+          const primaryIndex = formattedData.photos.findIndex(photo => photo.id === formattedData.primaryPhotoId);
+          if (primaryIndex !== -1) setCurrentImageIndex(primaryIndex);
         } else {
           setError('Не удалось загрузить данные с сервера.');
         }
@@ -315,7 +292,7 @@ const EditProfilePage = () => {
   };
 
   const handleRemovePhoto = async () => {
-    if (formData.photos.length === 0) return;
+    if (!formData.photos.length) return;
     const token = sessionStorage.getItem('authToken');
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
@@ -323,30 +300,46 @@ const EditProfilePage = () => {
     }
     const photoId = formData.photos[currentImageIndex].id;
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-      await axios.delete(`${baseUrl}/users/${userId}/photos/${photoId}`, {
+      await axios.delete(`${process.env.REACT_APP_API_URL}/users/${userId}/photos/${photoId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 5000,
       });
       setFormData(prev => {
         const newPhotos = prev.photos.filter((_, i) => i !== currentImageIndex);
-        return { ...prev, photos: newPhotos };
+        const newPrimaryPhotoId = prev.primaryPhotoId === photoId ? (newPhotos.length > 0 ? newPhotos[0].id : null) : prev.primaryPhotoId;
+        return { ...prev, photos: newPhotos, primaryPhotoId: newPrimaryPhotoId };
       });
       setCurrentImageIndex(prev => (prev >= formData.photos.length - 1 && prev > 0 ? prev - 1 : 0));
     } catch (error) {
-      console.error('Ошибка при удалении фото:', error.message, 'Config:', error.config);
+      console.error('Ошибка при удалении фото:', error.message);
       if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-        if (error.response.status === 404) {
-          alert('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-        } else if (error.response.status === 403) {
-          alert('Доступ запрещён (403). Проверьте права или CORS.');
-        } else {
-          alert(`Не удалось удалить фото: ${error.response?.data?.message || error.message}`);
-        }
+        if (error.response.status === 404) alert('Фотография не найдена (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось удалить фото: ${error.response.data.message || error.message}`);
       } else {
-        alert('Не удалось удалить фото: проблема с подключением к серверу');
+        alert('Не удалось удалить фото: проблема с подключением.');
       }
+    }
+  };
+
+  const handleShareGeo = () => {
+    setGeoError(null);
+    setGeoData(null);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setGeoData({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+          setShowManualInput(false);
+        },
+        (error) => {
+          setGeoError('Не удалось получить геолокацию: ' + error.message + '. Попробуйте снова или введите вручную.');
+          setShowManualInput(true);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setGeoError('Геолокация не поддерживается вашим устройством. Введите координаты вручную.');
+      setShowManualInput(true);
     }
   };
 
@@ -360,43 +353,40 @@ const EditProfilePage = () => {
       setIsSaving(false);
       return;
     }
+
     try {
+      const coordsToSend = geoData || (manualLatitude && manualLongitude ? { latitude: parseFloat(manualLatitude), longitude: parseFloat(manualLongitude) } : null);
+      if (coordsToSend) {
+        await axios.post(`${process.env.REACT_APP_API_URL}/geo`, coordsToSend, {
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        });
+      }
+
       const updatedAge = calculateAge(formData.birthDate);
       const apiData = {
         name: formData.name,
         surname: formData.surname,
         gender: formData.gender === 'М' ? 'MALE' : 'FEMALE',
         birth_date: formatDateToISO(formData.birthDate),
+    //    birth_date: formData.birthDate,
         about_myself: formData.description,
         jung_result: formData.personality,
         jung_last_attempt: new Date().toISOString(),
       };
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost';
-      await axios.patch(`${baseUrl}/users/${userId}/profile`, apiData, {
+      await axios.patch(`${process.env.REACT_APP_API_URL}/users/${userId}/profile`, apiData, {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        timeout: 5000,
       });
-      const updatedData = {
-        ...formData,
-        age: updatedAge !== '' ? updatedAge : formData.age,
-        about_myself: formData.description,
-        gender: formData.gender === 'М' ? 'MALE' : 'FEMALE',
-      };
+      const updatedData = { ...formData, age: updatedAge !== '' ? updatedAge : formData.age };
       sessionStorage.setItem('updatedUser', JSON.stringify(updatedData));
       navigate('/profile', { state: { updatedUser: updatedData } });
     } catch (error) {
-      console.error('Ошибка при сохранении:', error.message, 'Config:', error.config);
+      console.error('Ошибка при сохранении:', error.message);
       if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data, 'Headers:', error.response.headers);
-        if (error.response.status === 404) {
-          alert('Ресурс не найден (404). Проверьте URL или эндпоинт.');
-        } else if (error.response.status === 403) {
-          alert('Доступ запрещён (403). Проверьте права или CORS.');
-        } else {
-          alert(`Не удалось сохранить изменения: ${error.response?.data?.message || error.message}`);
-        }
+        if (error.response.status === 404) alert('Ресурс не найден (404).');
+        else if (error.response.status === 403) alert('Доступ запрещён (403).');
+        else alert(`Не удалось сохранить изменения: ${error.response.data.message || error.message}`);
       } else {
-        alert('Не удалось сохранить изменения: проблема с подключением к серверу');
+        alert('Не удалось сохранить изменения: проблема с подключением.');
       }
     } finally {
       setIsSaving(false);
@@ -413,15 +403,41 @@ const EditProfilePage = () => {
       <header className="fixed top-0 left-0 right-0 bg-black z-50"><div className="flex justify-center px-4 py-2"><span className="text-white font-bold text-xl">Мой профиль</span></div></header>
       <div className="mt-10" />
       {error && <div className="w-[90%] max-w-[500px] mx-auto text-red-500 text-sm mb-2">{error}</div>}
+      {geoError && <div className="w-[90%] max-w-[500px] mx-auto text-orange-500 text-sm mb-2">{geoError}</div>}
+      {geoData && <div className="w-[90%] max-w-[500px] mx-auto text-green-500 text-sm mb-2">Геолокация: Широта {geoData.latitude}, Долгота {geoData.longitude}</div>}
+      <div className="w-[90%] max-w-[500px] mx-auto flex flex-col gap-2 mb-4">
+        <button onClick={handleShareGeo} className="bg-blue-500 text-white px-4 py-2 border-2 border-black rounded-[15px] flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Поделиться геолокацией
+        </button>
+        {showManualInput && (
+          <>
+            <div><label className="block text-gray-600 text-sm mb-1">Широта:</label><input type="number" value={manualLatitude} onChange={(e) => setManualLatitude(e.target.value)} className="w-full border-2 border-black rounded-[15px] p-2 text-black" placeholder="Широта" /></div>
+            <div><label className="block text-gray-600 text-sm mb-1">Долгота:</label><input type="number" value={manualLongitude} onChange={(e) => setManualLongitude(e.target.value)} className="w-full border-2 border-black rounded-[15px] p-2 text-black" placeholder="Долгота" /></div>
+          </>
+        )}
+      </div>
       <div className="relative w-full max-w-[500px] mx-auto">
         <div className="relative w-full pt-[100%] bg-gray-300">
           <div className="absolute top-2 right-2 z-20 flex gap-2">
             <button onClick={() => document.getElementById('photoInput').click()} className="bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
             </button>
-            {formData.photos.length > 0 && <button onClick={handleRemovePhoto} className="bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>}
+            {formData.photos.length > 0 && (
+              <button onClick={handleRemovePhoto} className="bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            )}
+            {formData.photos.length > 0 && (
+              <button
+                onClick={handleSetPrimaryPhoto}
+                className={`bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center ${formData.photos[currentImageIndex].id === formData.primaryPhotoId ? 'bg-green-500' : ''}`}
+                disabled={formData.photos[currentImageIndex].id === formData.primaryPhotoId}
+                title={formData.photos[currentImageIndex].id === formData.primaryPhotoId ? 'Это основная фотография' : 'Назначить основной'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </button>
+            )}
           </div>
           {formData.photos.length > 0 ? (
             <>
@@ -437,7 +453,9 @@ const EditProfilePage = () => {
                 </>
               )}
             </>
-          ) : <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center"><span className="text-gray-600 text-sm">Нет фото</span></div>}
+          ) : (
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center"><span className="text-gray-600 text-sm">Нет фото</span></div>
+          )}
           <input id="photoInput" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
         </div>
         <div className="absolute bottom-0 w-full border-b-2 border-black" />
@@ -454,11 +472,11 @@ const EditProfilePage = () => {
           <div><label className="block text-gray-600 text-sm mb-1">Фамилия</label><input type="text" name="surname" value={formData.surname} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black" placeholder="Фамилия" /></div>
           <div className="flex gap-4">
             <div className="flex-1"><label className="block text-gray-600 text-sm mb-1">Пол:</label><div className="flex gap-4"><label className="flex items-center"><input type="radio" name="gender" value="М" checked={formData.gender === 'М'} onChange={handleChange} className="mr-2" />М</label><label className="flex items-center"><input type="radio" name="gender" value="Ж" checked={formData.gender === 'Ж'} onChange={handleChange} className="mr-2" />Ж</label></div></div>
-            <div className="flex-1"><label className="block text-gray-600 text-sm mb-1">Дата рождения:</label><input type="text" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black" placeholder="ДД.ММ.ГГГГ" />{age !== '' && <p className="text-gray-600 text-sm mt-1">Возраст: {age} лет</p>}</div>
+            <div className="flex-1"><label className="block text-gray-600 text-sm mb-1">Дата рождения:</label><input type="text" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black" placeholder="ДД.ММ.ГГГГ" />{age && <p className="text-gray-600 text-sm mt-1">Возраст: {age} лет</p>}</div>
           </div>
           <div><label className="block text-gray-600 text-sm mb-1">О себе</label><textarea name="description" value={formData.description} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black h-32 resize-none" placeholder="О себе" /></div>
           <div className="flex gap-4 items-end">
-            <div className="flex-1"><label className="block text-gray-600 text-sm mb-1">Тип Юнга:</label><select name="personality" value={formData.personality} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black">{personalityTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
+            <div className="flex-1"><label className="block text-gray-600 text-sm mb-1">Тип Юнга:</label><select name="personality" value={formData.personality} onChange={handleChange} className="w-full border-2 border-black rounded-[15px] p-2 text-black">{personalityTypes.map(type => <option key={type} value={type}>{type}</option>)}</select></div>
             <button onClick={handleTestRedirect} className="bg-gray-200 text-gray-600 px-4 py-2 border-2 border-black rounded-[15px]">Тестирование</button>
           </div>
           <div><label className="block text-gray-600 text-sm mb-1">Теги:</label><div className="flex gap-2"><input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} className="flex-1 border-2 border-black rounded-[15px] p-2 text-black" placeholder="Новый тег" /><button onClick={handleAddTag} className="bg-gray-200 text-gray-600 px-4 py-2 border-2 border-black rounded-[15px]">Добавить</button></div><div className="flex flex-wrap gap-2 mt-2">{formData.tags.map(tag => <div key={tag.id} className="flex items-center bg-gray-200 rounded-[15px] px-3 py-1"><span className="text-gray-600 text-sm">{tag.name}</span><button onClick={() => handleRemoveTag(tag.id)} className="ml-2 text-red-500 hover:text-red-700">×</button></div>)}</div></div>

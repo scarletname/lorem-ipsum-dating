@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -10,7 +10,7 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchRecommendations = async (limit = 50) => {
+  const fetchRecommendations = useCallback(async (limit = 1) => {
     const authToken = sessionStorage.getItem('authToken');
     if (!authToken) {
       navigate('/login');
@@ -19,7 +19,7 @@ const Home = () => {
 
     try {
       // Логируем URL для отладки
-      const recommendationUrl = `/api/v1/recommendation/fetch?limit=${limit}`;
+      const recommendationUrl = `${process.env.REACT_APP_API_URL}/api/v1/recommend/fetch?limit=${limit}`;
       console.log('Запрос рекомендаций по URL:', recommendationUrl);
 
       // Получаем рекомендации (список ID пользователей)
@@ -102,11 +102,11 @@ const Home = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     fetchRecommendations();
-  }, []);
+  }, [fetchRecommendations]);
 
   const handleSwipe = async (targetId, like) => {
     const authToken = sessionStorage.getItem('authToken');
