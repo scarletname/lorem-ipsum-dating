@@ -188,10 +188,10 @@ const ProfilePage = () => {
           {user.photos && user.photos.length > 0 ? (
             <>
               <img
-                src={user.photos[currentImageIndex]?.url || '/assets/images/placeholder.jpg'}
+                src={user.photos[currentImageIndex]?.url}
                 alt="Profile"
                 className="absolute top-0 left-0 w-full h-full object-cover"
-                onError={(e) => { e.target.src = '/assets/images/placeholder.jpg'; }}
+                
               />
               {user.photos.length > 1 && (
                 <>

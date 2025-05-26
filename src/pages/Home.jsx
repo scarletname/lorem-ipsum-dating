@@ -216,9 +216,6 @@ const Home = () => {
                 src={images[currentImageIndex]?.url}
                 alt={user.name}
                 className="absolute top-0 left-0 w-full h-full object-cover bg-gray-300 rounded-t-lg"
-                onError={(e) => {
-                  e.target.src = '/assets/images/placeholder.jpg';
-                }}
               />
               {images.length > 1 && (
                 <>
