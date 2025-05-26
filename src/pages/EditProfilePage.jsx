@@ -28,12 +28,26 @@ async function fetchData(userId) {
     const data = userResponse.data;
     const photos = data.photos || [];
     const tags = data.tags || [];
-    const primaryPhotoId = photos.find(photo => photo.url === data.primary_photo)?.id || null;
+
+    // Базовый URL для хранилища
+
+    // Форматируем primary_photo, добавляя baseUrl, если это относительный путь
+    const primaryPhotoUrl = data.primary_photo;
+
+    // Форматируем URL фотографий
+    const formattedPhotos = photos.map(photo => ({
+      id: photo.id,
+      url: photo.url,
+    }));
+
+    // Определяем ID основной фотографии, сравнивая полный URL primary_photo с photos[i].url
+    const primaryPhotoId = formattedPhotos.find(photo => photo.url === primaryPhotoUrl)?.id || null;
 
     return {
       ...data,
+      primary_photo: primaryPhotoUrl, // Обновляем primary_photo с полным URL
       primaryPhotoId,
-      photos: photos.map(photo => ({ id: photo.id, url: photo.url })),
+      photos: formattedPhotos,
       tags: tags.map(tag => ({ id: tag.id, user_id: tag.user_id, name: tag.value })),
     };
   } catch (error) {
@@ -44,7 +58,6 @@ async function fetchData(userId) {
     throw error;
   }
 }
-
 const EditProfilePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,14 +138,12 @@ const EditProfilePage = () => {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 5000,
       });
-      console.log('Ответ сервера при загрузке фото:', response.data);
-      const { id, url } = response.data;
-      if (!id || !url) {
-        throw new Error('Сервер вернул некорректные данные (отсутствует id или url)');
+      if (!response.data.url) {
+        throw new Error('URL фотографии не вернулся с сервера.');
       }
-      return { id, url };
+      return { id: response.data.id, url: response.data.url };
     } catch (error) {
-      console.error('Ошибка при загрузке фото:', error.message, error.response?.data);
+      console.error('Ошибка при загрузке фото:', error.message);
       if (error.response) {
         if (error.response.status === 404) alert('Ресурс не найден (404).');
         else if (error.response.status === 403) alert('Доступ запрещён (403).');
@@ -290,11 +301,8 @@ const EditProfilePage = () => {
     if (!file) return;
     const uploadedPhoto = await uploadPhoto(file);
     if (uploadedPhoto) {
-      setFormData(prev => {
-        const newPhotos = [...prev.photos, uploadedPhoto];
-        return { ...prev, photos: newPhotos };
-      });
-      setCurrentImageIndex(prev => prev + 1); // Переключаемся на новое фото
+      setFormData(prev => ({ ...prev, photos: [...prev.photos, uploadedPhoto] }));
+      setCurrentImageIndex(formData.photos.length);
     }
   };
 
@@ -375,6 +383,7 @@ const EditProfilePage = () => {
         surname: formData.surname,
         gender: formData.gender === 'М' ? 'MALE' : 'FEMALE',
         birth_date: formatDateToISO(formData.birthDate),
+        //    birth_date: formData.birthDate,
         about_myself: formData.description,
         jung_result: formData.personality,
         jung_last_attempt: new Date().toISOString(),
@@ -447,15 +456,7 @@ const EditProfilePage = () => {
           </div>
           {formData.photos.length > 0 ? (
             <>
-              <img
-                src={formData.photos[currentImageIndex]?.url || ''}
-                alt="Profile"
-                className="absolute top-0 left-0 w-full h-full object-cover"
-                onError={(e) => {
-                  console.log('Ошибка загрузки изображения:', e.target.src);
-                  e.target.style.display = 'none'; // Скрываем изображение при ошибке
-                }}
-              />
+              <img src={formData.photos[currentImageIndex].url} alt="Profile" className="absolute top-0 left-0 w-full h-full object-cover" />
               {formData.photos.length > 1 && (
                 <>
                   <button onClick={handlePrevImage} className="absolute top-1/2 left-2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex justify-center items-center">
@@ -466,16 +467,9 @@ const EditProfilePage = () => {
                   </button>
                 </>
               )}
-              {!formData.photos[currentImageIndex]?.url && (
-                <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-gray-300">
-                  <span className="text-gray-600 text-sm">Изображение не доступно</span>
-                </div>
-              )}
             </>
           ) : (
-            <div className="absolute top-0 left-0 w-full h-full flexg items-center justify-center bg-gray-300">
-              <span className="text-gray-600 text-sm">Нет фото</span>
-            </div>
+            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center"><span className="text-gray-600 text-sm">Нет фото</span></div>
           )}
           <input id="photoInput" type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
         </div>
