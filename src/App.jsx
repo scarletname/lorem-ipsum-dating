@@ -23,43 +23,17 @@ const Layout = ({ children }) => {
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Home />} /> {/* Убрано перенаправление на /login */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/home"
-          element={
-            <Layout>
-              <Home />
-            </Layout>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <Layout>
-              <ProfilePage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/edit-profile"
-          element={
-            <Layout>
-              <EditProfilePage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <Layout>
-              <SwipesPage />
-            </Layout>
-          }
-        />
-        <Route path="/code_callback" element={<CallbackPage />} />
-      </Routes>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/edit-profile" element={<EditProfilePage />} />
+          <Route path="/swipes" element={<SwipesPage />} />
+          <Route path="/code_callback" element={<CallbackPage />} />
+        </Routes>
+      </Layout>
     </Router>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { fetchRecommendations, performSwipe, formatGender, getAuthToken } from '../utils/api';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -10,128 +10,48 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchRecommendations = useCallback(async (limit = 1) => {
-    const authToken = sessionStorage.getItem('authToken');
+  const loadRecommendations = useCallback(async (limit = 1) => {
+    const authToken = getAuthToken();
     if (!authToken) {
       navigate('/login');
       return;
     }
 
     try {
-      // Логируем URL для отладки
-      const recommendationUrl = `${process.env.REACT_APP_API_URL}/api/v1/recommend/fetch?limit=${limit}`;
-      console.log('Запрос рекомендаций по URL:', recommendationUrl);
-
-      // Получаем рекомендации (список ID пользователей)
-      const recommendationsResponse = await axios.get(recommendationUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
-      const userIds = recommendationsResponse.data.users || [];
-
-      // Запрашиваем данные каждого пользователя
-      const userPromises = userIds.map(async (id) => {
-        try {
-          const userResponse = await axios.get(`/users/${id}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-          });
-          const userData = userResponse.data;
-
-          // Запрашиваем фото пользователя
-          let photosData = [];
-          try {
-            const photosResponse = await axios.get(`/users/${id}/photos`, {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            photosData = photosResponse.data || [];
-          } catch (photoError) {
-            console.warn(`Не удалось загрузить фото для пользователя ${id}:`, photoError.message);
-          }
-
-          // Запрашиваем теги пользователя
-          let tagsData = [];
-          try {
-            const tagsResponse = await axios.get(`/users/${id}/tags`, {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            tagsData = tagsResponse.data || [];
-          } catch (tagError) {
-            console.warn(`Не удалось загрузить теги для пользователя ${id}:`, tagError.message);
-          }
-
-          return {
-            ...userData,
-            photos: photosData,
-            tags: tagsData.map(tag => ({
-              id: tag.id,
-              user_id: tag.user_id,
-              name: tag.value,
-            })),
-          };
-        } catch (error) {
-          console.error(`Ошибка загрузки данных пользователя ${id}:`, error.message);
-          return null;
-        }
-      });
-
-      const usersData = (await Promise.all(userPromises)).filter(user => user !== null);
+      setIsLoading(true);
+      const usersData = await fetchRecommendations(limit, authToken);
       setUsers(usersData);
       setCurrentUserIndex(0);
       setCurrentImageIndex(0);
       setError(null);
     } catch (error) {
       console.error('Ошибка загрузки рекомендаций:', error.message);
-      if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data);
-        setError(`Не удалось загрузить рекомендации: ${error.response.data.message || error.message}`);
-      } else if (error.request) {
-        console.error('Возможная причина: CORS или сервер недоступен.');
-        setError('Не удалось загрузить рекомендации: проблема с подключением к серверу');
-      } else {
-        setError(`Не удалось загрузить рекомендации: ${error.message}`);
-      }
+      setError(error.response?.data?.message || 'Не удалось загрузить рекомендации');
     } finally {
       setIsLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
-    fetchRecommendations();
-  }, [fetchRecommendations]);
+    loadRecommendations();
+  }, [loadRecommendations]);
 
   const handleSwipe = async (targetId, like) => {
-    const authToken = sessionStorage.getItem('authToken');
+    const authToken = getAuthToken();
     if (!authToken) {
       navigate('/login');
       return;
     }
 
     try {
-      await axios.post(`/swipes`, {
-        targetId,
-        like,
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
+      await performSwipe(targetId, like, authToken);
 
       // Переходим к следующему пользователю
       setCurrentUserIndex(prev => {
         const nextIndex = prev + 1;
         if (nextIndex >= users.length) {
           // Если пользователи закончились, загружаем новые рекомендации
-          fetchRecommendations();
+          loadRecommendations();
           return 0;
         }
         return nextIndex;
@@ -139,20 +59,12 @@ const Home = () => {
       setCurrentImageIndex(0);
     } catch (error) {
       console.error('Ошибка при свайпе:', error.message);
-      if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data);
-        alert(`Не удалось выполнить свайп: ${error.response.data.message || error.message}`);
-      } else if (error.request) {
-        console.error('Возможная причина: CORS или сервер недоступен.');
-        alert('Не удалось выполнить свайп: проблема с подключением к серверу');
-      } else {
-        alert(`Не удалось выполнить свайп: ${error.message}`);
-      }
+      alert(error.response?.data?.message || 'Не удалось выполнить свайп');
     }
   };
 
   const handleLike = () => {
-    if (!sessionStorage.getItem('authToken')) {
+    if (!getAuthToken()) {
       navigate('/login');
       return;
     }
@@ -162,7 +74,7 @@ const Home = () => {
   };
 
   const handleDislike = () => {
-    if (!sessionStorage.getItem('authToken')) {
+    if (!getAuthToken()) {
       navigate('/login');
       return;
     }
@@ -268,7 +180,7 @@ const Home = () => {
 
           <div className="p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold">
-              {user.name}, {user.gender === 'MALE' ? 'М' : user.gender === 'FEMALE' ? 'Ж' : user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
+              {user.name}, {formatGender(user.gender)}, {user.age ? `${user.age} лет` : 'возраст не указан'}, {user.jung_result || 'INTP'}
             </h2>
             <p className="text-gray-600 mt-2 text-sm sm:text-base">
               {user.about_myself || 'Нет описания'}

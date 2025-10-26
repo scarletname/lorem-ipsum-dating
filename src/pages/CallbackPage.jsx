@@ -1,18 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-
-const decodeToken = (token) => {
-  try {
-    const payload = token.split('.')[1];
-    const decodedPayload = atob(payload);
-    const parsedPayload = JSON.parse(decodedPayload);
-    return parsedPayload.sub || parsedPayload.id || parsedPayload.user_id;
-  } catch (error) {
-    console.error('Ошибка при декодировании токена:', error.message);
-    return null;
-  }
-};
+import { decodeToken } from '../utils/api';
 
 const createOrCheckUserProfile = async (userId, token) => {
   const headers = {

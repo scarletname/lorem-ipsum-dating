@@ -1,180 +1,28 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { fetchMatches, fetchSwipes, performSwipe, formatGender, getAuthToken } from '../utils/api';
 
 const SwipesPage = () => {
   const [matches, setMatches] = useState([]);
   const [swipes, setSwipes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('matches'); // 'matches' или 'swipes'
-
-  // Загрузка мэтчей
-  const fetchMatches = async () => {
-    const authToken = localStorage.getItem('authToken');
-    try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/matches?page=0&limit=4`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
-      const userIds = response.data;
-
-      const userPromises = userIds.map(async (id) => {
-        try {
-          const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-          });
-          const userData = userResponse.data;
-
-          let photosData = [];
-          try {
-            const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}/photos`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            photosData = photosResponse.data;
-          } catch (photoError) {
-            console.warn(`Не удалось загрузить фото для пользователя ${id}:`, photoError.message);
-          }
-
-          let tagsData = [];
-          try {
-            const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}/tags`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            tagsData = tagsResponse.data;
-          } catch (tagError) {
-            console.warn(`Не удалось загрузить теги для пользователя ${id}:`, tagError.message);
-          }
-
-          return {
-            ...userData,
-            photos: photosData,
-            tags: tagsData.map(tag => ({
-              id: tag.id,
-              user_id: tag.user_id,
-              name: tag.value,
-            })),
-          };
-        } catch (error) {
-          console.error(`Ошибка загрузки данных пользователя ${id}:`, error.message);
-          return null;
-        }
-      });
-
-      const usersData = (await Promise.all(userPromises)).filter(user => user !== null);
-      return usersData;
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  // Загрузка свайпов
-  const fetchSwipes = async () => {
-    const authToken = localStorage.getItem('authToken');
-    try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/swipes?page=0&limit=4`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
-      const userIds = response.data;
-
-      const userPromises = userIds.map(async (id) => {
-        try {
-          const userResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-          });
-          const userData = userResponse.data;
-
-          let photosData = [];
-          try {
-            const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}/photos`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            photosData = photosResponse.data;
-          } catch (photoError) {
-            console.warn(`Не удалось загрузить фото для пользователя ${id}:`, photoError.message);
-          }
-
-          let tagsData = [];
-          try {
-            const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${id}/tags`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`,
-              },
-            });
-            tagsData = tagsResponse.data;
-          } catch (tagError) {
-            console.warn(`Не удалось загрузить теги для пользователя ${id}:`, tagError.message);
-          }
-
-          return {
-            ...userData,
-            photos: photosData,
-            tags: tagsData.map(tag => ({
-              id: tag.id,
-              user_id: tag.user_id,
-              name: tag.value,
-            })),
-          };
-        } catch (error) {
-          console.error(`Ошибка загрузки данных пользователя ${id}:`, error.message);
-          return null;
-        }
-      });
-
-      const usersData = (await Promise.all(userPromises)).filter(user => user !== null);
-      return usersData;
-    } catch (error) {
-      throw error;
-    }
-  };
+  const [activeTab, setActiveTab] = useState('matches');
 
   // Обработка свайпа (оценка)
   const handleSwipe = async (targetId, like) => {
-    const authToken = localStorage.getItem('authToken');
-    try {
-      await axios.post(`${process.env.REACT_APP_API_URL}/swipes`, {
-        targetId,
-        like,
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
+    const authToken = getAuthToken();
+    if (!authToken) {
+      setError('Токен отсутствует');
+      return;
+    }
 
+    try {
+      await performSwipe(targetId, like, authToken);
       // Удаляем пользователя из списка свайпов после оценки
       setSwipes(prevSwipes => prevSwipes.filter(user => user.id !== targetId));
     } catch (error) {
       console.error('Ошибка при свайпе:', error.message);
-      if (error.response) {
-        console.error('Ответ сервера:', error.response.status, error.response.data);
-        setError(`Не удалось выполнить свайп: ${error.response.data.message || error.message}`);
-      } else if (error.request) {
-        console.error('Возможная причина: CORS или сервер недоступен.');
-        setError('Не удалось выполнить свайп: проблема с подключением к серверу');
-      } else {
-        setError(`Не удалось выполнить свайп: ${error.message}`);
-      }
+      setError(error.response?.data?.message || 'Не удалось выполнить свайп');
     }
   };
 
@@ -188,29 +36,31 @@ const SwipesPage = () => {
 
   // Загрузка данных при монтировании
   useEffect(() => {
-    const fetchData = async () => {
+    const loadData = async () => {
+      const authToken = getAuthToken();
+      if (!authToken) {
+        setError('Токен отсутствует');
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const [matchesData, swipesData] = await Promise.all([fetchMatches(), fetchSwipes()]);
+        const [matchesData, swipesData] = await Promise.all([
+          fetchMatches(0, 4, authToken),
+          fetchSwipes(0, 4, authToken)
+        ]);
         setMatches(matchesData);
         setSwipes(swipesData);
         setError(null);
       } catch (error) {
         console.error('Ошибка загрузки данных:', error.message);
-        if (error.response) {
-          console.error('Ответ сервера:', error.response.status, error.response.data);
-          setError(`Не удалось загрузить данные: ${error.response.data.message || error.message}`);
-        } else if (error.request) {
-          console.error('Возможная причина: CORS или сервер недоступен.');
-          setError('Не удалось загрузить данные: проблема с подключением к серверу');
-        } else {
-          setError(`Не удалось загрузить данные: ${error.message}`);
-        }
+        setError(error.response?.data?.message || 'Не удалось загрузить данные');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
+    loadData();
   }, []);
 
   if (isLoading) {
@@ -277,7 +127,7 @@ const SwipesPage = () => {
 
                 <div className="p-4 sm:p-6">
                   <h2 className="text-lg sm:text-xl font-bold">
-                    {user.name}, {user.gender === 'MALE' ? 'М' : user.gender === 'FEMALE' ? 'Ж' : user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
+                    {user.name}, {formatGender(user.gender)}, {user.age ? `${user.age} лет` : 'возраст не указан'}, {user.jung_result || 'INTP'}
                   </h2>
                   <p className="text-gray-600 mt-2 text-sm sm:text-base">
                     {user.about_myself || 'Нет описания'}
@@ -322,7 +172,7 @@ const SwipesPage = () => {
 
                 <div className="p-4 sm:p-6">
                   <h2 className="text-lg sm:text-xl font-bold">
-                    {user.name}, {user.gender === 'MALE' ? 'М' : user.gender === 'FEMALE' ? 'Ж' : user.gender}, {user.age || '20'} лет, {user.jung_result || 'INTP'}
+                    {user.name}, {formatGender(user.gender)}, {user.age ? `${user.age} лет` : 'возраст не указан'}, {user.jung_result || 'INTP'}
                   </h2>
                   <p className="text-gray-600 mt-2 text-sm sm:text-base">
                     {user.about_myself || 'Нет описания'}

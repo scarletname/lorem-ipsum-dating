@@ -1,70 +1,61 @@
-# Getting Started with Create React App
+# Lorem Dating App - Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Современное веб-приложение для знакомств, основанное на психотипах личности по Юнгу, системе тэгов-интересов и системе рекомендаций по фотографиям пользователей.
 
-## Available Scripts
+## Технологии
 
-In the project directory, you can run:
+- **React 19** - современная библиотека для создания пользовательских интерфейсов
+- **React Router** - маршрутизация на стороне клиента
+- **Axios** - HTTP-клиент для взаимодействия с API
+- **Tailwind CSS** - утилитарный CSS-фреймворк для стилизации
 
-### `npm start`
+## Основные функции
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Авторизация** через keycloak
+- **Профиль пользователя** с редактированием данных
+- **Управление фотографиями** (загрузка, удаление, выбор основной)
+- **Система тегов** для описания интересов
+- **Система рекомендаций** пользователей
+- **Свайпы** (лайки/дизлайки)
+- **Мэтчи** - взаимные симпатии
+- **Геолокация** для поиска пользователей поблизости
+- **Типы личности по Юнгу** (MBTI)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Структура проекта
 
-### `npm test`
+```
+src/
+├── components/          # Переиспользуемые компоненты
+│   └── NavigationBar.jsx
+├── pages/              # Страницы приложения
+│   ├── Home.jsx        # Главная страница с рекомендациями
+│   ├── ProfilePage.jsx # Профиль пользователя
+│   ├── EditProfilePage.jsx # Редактирование профиля
+│   ├── SwipesPage.jsx  # Мэтчи и входящие свайпы
+│   ├── LoginPage.jsx   # Страница авторизации
+│   └── CallbackPage.jsx # OAuth callback
+├── utils/              # Утилиты и API
+│   └── api.js          # Централизованные API функции
+└── assets/             # Статические ресурсы
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Особенности UI/UX
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- Адаптивный дизайн для всех устройств
+- Карусель фотографий в профилях
+- Интуитивная навигация
+- 
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### `npm run eject`
+Проект демонстрирует навыки работы с:
+- Современным React (hooks, functional components)
+- REST API интеграцией
+- Управлением состоянием
+- Роутингом
+- OAuth авторизацией
+- Работой с формами и загрузкой файлов
+- Адаптивной версткой
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

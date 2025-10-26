@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { decodeToken, fetchUserData, calculateAge, formatGender, getAuthToken } from '../utils/api';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -10,75 +10,13 @@ const ProfilePage = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState(null);
 
-  const decodeToken = (token) => {
-    try {
-      const payload = token.split('.')[1];
-      const decodedPayload = atob(payload);
-      const parsedPayload = JSON.parse(decodedPayload);
-      return parsedPayload.sub || parsedPayload.id || parsedPayload.user_id;
-    } catch (error) {
-      console.error('Ошибка при декодировании токена:', error.message);
-      return null;
-    }
-  };
-
-  const fetchData = async (userId, token) => {
-    const userUrl = `${process.env.REACT_APP_API_URL}/users/${userId}`;
-
-    try {
-      const userResponse = await axios.get(userUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      const data = userResponse.data;
-
-      let photosData = [];
-      try {
-        const photosResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${userId}/photos`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        photosData = photosResponse.data || [];
-      } catch (photoError) {
-        console.warn('Не удалось загрузить фотографии:', photoError.message);
-      }
-
-      let tagsData = [];
-      try {
-        const tagsResponse = await axios.get(`${process.env.REACT_APP_API_URL}/users/${userId}/tags`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        tagsData = tagsResponse.data || [];
-      } catch (tagError) {
-        console.warn('Не удалось загрузить теги:', tagError.message);
-      }
-
-      return {
-        ...data,
-        photos: photosData,
-        tags: tagsData.map(tag => ({
-          id: tag.id,
-          user_id: tag.user_id,
-          name: tag.value, // Маппим value в name
-        })) || [],
-      };
-    } catch (error) {
-      console.error('Ошибка запроса:', error.message);
-      return null;
-    }
-  };
-
   useEffect(() => {
     const loadData = async () => {
-      const token = sessionStorage.getItem('authToken');
+      const token = getAuthToken();
       if (!token) {
         setError('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
         setIsLoading(false);
+        navigate('/login');
         return;
       }
 
@@ -93,49 +31,26 @@ const ProfilePage = () => {
       if (state?.updatedUser) {
         setUser(state.updatedUser);
       } else {
-        const serverData = await fetchData(userId, token);
+        const serverData = await fetchUserData(userId, token);
         if (serverData) {
           setUser({
             ...serverData,
-            gender: serverData.gender === 'MALE' ? 'М' : serverData.gender === 'FEMALE' ? 'Ж' : serverData.gender || 'М',
-            age: serverData.birth_date ? calculateAge(new Date(serverData.birth_date).toLocaleDateString('ru-RU')) : '',
+            gender: formatGender(serverData.gender),
+            age: serverData.age,
             personality: serverData.jung_result || 'INTP',
             about_myself: serverData.about_myself || '',
           });
         } else {
-          const savedData = localStorage.getItem('updatedUser');
-          setUser(savedData ? JSON.parse(savedData) : {
-            name: '',
-            gender: 'М',
-            age: '',
-            personality: 'INTP',
-            about_myself: '',
-            photos: [],
-            tags: [],
-          });
-          setError('Не удалось загрузить данные с сервера. Используются сохранённые или дефолтные данные.');
+          setError('Не удалось загрузить данные с сервера.');
         }
       }
       setIsLoading(false);
     };
 
-    const calculateAge = (birthDate) => {
-      if (!birthDate || !/^\d{2}\.\d{2}\.\d{4}$/.test(birthDate)) return '';
-      const [day, month, year] = birthDate.split('.').map(Number);
-      const birth = new Date(year, month - 1, day);
-      const today = new Date();
-      let age = today.getFullYear() - birth.getFullYear();
-      const monthDiff = today.getMonth() - birth.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-        age--;
-      }
-      return age.toString();
-    };
-
     loadData();
 
     const handleStorageChange = () => {
-      const savedData = localStorage.getItem('updatedUser');
+      const savedData = sessionStorage.getItem('updatedUser');
       if (savedData) {
         setUser(JSON.parse(savedData));
       }
@@ -143,7 +58,7 @@ const ProfilePage = () => {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [location]);
+  }, [location, navigate]);
 
   const handleEditToggle = () => {
     console.log('Navigating to edit-profile with user:', user);
@@ -270,8 +185,8 @@ const ProfilePage = () => {
         <div className="flex flex-col text-left">
           <h2 className="text-[32px] font-bold">{user.name || 'Имя не указано'}</h2>
           <p className="text-[20px] text-gray-600 mt-2">
-            {user.gender === 'М' || user.gender === 'MALE' ? 'М' : user.gender === 'Ж' || user.gender === 'FEMALE' ? 'Ж' : 'Пол не указан'},{' '}
-            {user.age || 'Возраст не указан'} лет, {user.personality || 'Тип Юнга не указан'}
+            {formatGender(user.gender)},{' '}
+            {user.age ? `${user.age} лет` : 'возраст не указан'}, {user.personality || 'Тип Юнга не указан'}
           </p>
           <p className="text-gray-600 text-sm mt-1">{user.about_myself || 'О себе не указано'}</p>
           {user.tags && user.tags.length > 0 && (

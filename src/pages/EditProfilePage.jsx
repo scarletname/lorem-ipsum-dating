@@ -1,19 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
-// Функция для декодирования JWT-токена и получения user_id
-const decodeToken = (token) => {
-  try {
-    const payload = token.split('.')[1];
-    const decodedPayload = atob(payload);
-    const parsedPayload = JSON.parse(decodedPayload);
-    return parsedPayload.sub || parsedPayload.id || parsedPayload.user_id;
-  } catch (error) {
-    console.error('Ошибка при декодировании токена:', error.message);
-    return null;
-  }
-};
+import { decodeToken, calculateAge, getAuthToken } from '../utils/api';
 
 // Функция для получения данных пользователя
 async function fetchData(userId) {
@@ -89,7 +77,7 @@ const EditProfilePage = () => {
   const [showManualInput, setShowManualInput] = useState(false);
 
   useEffect(() => {
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       setError('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       setIsLoading(false);
@@ -106,17 +94,6 @@ const EditProfilePage = () => {
     setUserId(id);
   }, [navigate]);
 
-  const calculateAge = (birthDate) => {
-    if (!birthDate || !/^\d{2}\.\d{2}\.\d{4}$/.test(birthDate)) return '';
-    const [day, month, year] = birthDate.split('.').map(Number);
-    const birth = new Date(year, month - 1, day);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
-    return age.toString();
-  };
-
   const formatDateToISO = (dateString) => {
     if (!dateString || !/^\d{2}\.\d{2}\.\d{4}$/.test(dateString)) return null;
     const [day, month, year] = dateString.split('.');
@@ -124,7 +101,7 @@ const EditProfilePage = () => {
   };
 
   const uploadPhoto = async (file) => {
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       return null;
@@ -162,7 +139,7 @@ const EditProfilePage = () => {
       return;
     }
 
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       return;
@@ -192,7 +169,7 @@ const EditProfilePage = () => {
   };
 
   const handleRemoveTag = async (tagId) => {
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       return;
@@ -228,7 +205,7 @@ const EditProfilePage = () => {
       return;
     }
     const photoId = formData.photos[currentImageIndex].id;
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       return;
@@ -308,7 +285,7 @@ const EditProfilePage = () => {
 
   const handleRemovePhoto = async () => {
     if (!formData.photos.length) return;
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       return;
@@ -362,7 +339,7 @@ const EditProfilePage = () => {
     e.stopPropagation();
     e.preventDefault();
     setIsSaving(true);
-    const token = sessionStorage.getItem('authToken');
+    const token = getAuthToken();
     if (!token) {
       alert('Токен отсутствует. Пожалуйста, авторизуйтесь снова.');
       setIsSaving(false);
